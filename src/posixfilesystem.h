@@ -59,13 +59,11 @@ public:
     {
         int fd;
         std::string path = path_for_file(name);
+		
 #ifdef _WIN32
-
         errno_t code = _sopen_s(&fd, path.c_str(), _O_RDWR | _O_BINARY, _SH_DENYNO, _S_IREAD | _S_IWRITE);
-
 #else
         fd = open(path.c_str(), O_RDWR );
-
 #endif
         return fd;
     }
@@ -74,23 +72,27 @@ public:
     {
         int fd;
         std::string path = path_for_file(name);
+		
 #ifdef _WIN32
         errno_t code = _sopen_s(&fd, path.c_str(), _O_RDWR | _O_BINARY | _O_CREAT | _O_TRUNC, _SH_DENYNO, _S_IREAD | _S_IWRITE);
 #else
         fd = open(path.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
 #endif
+		
         return fd;
     }
 
     
     int close_file(int file_handle)
     {
+		
 #ifdef _WIN32
         if (file_handle == -1) return -1;
         return _close(file_handle);
 #else
         return close(file_handle);
 #endif
+		
     }
 
     int read(int file_handle, char *buffer, int bytes)
@@ -100,15 +102,18 @@ public:
 #else
         return (int) ::read(file_handle, buffer, bytes);
 #endif
+		
     }
 
     int write(int file_handle, const char *buffer, int bytes)
     {
+		
 #ifdef _WIN32
         return _write(file_handle, buffer, bytes);
 #else
         return (int) ::write(file_handle, buffer, bytes);
 #endif
+		
     }
 
 
@@ -119,26 +124,22 @@ public:
 #else
         return ftruncate(file_handle, length) != -1;
 #endif
+		
     }
 
     int file_size(int file_handle)
     {
+		
 #ifdef _WIN32
         if (file_handle == -1) return -1;
-        
         struct _stat s;
         if (_fstat(file_handle, &s) != -1)
-        {
             return (int) s.st_size;
-        }
-
         return -1;
 #else
         struct stat s;
         if (fstat(file_handle, &s) != -1)
-        {
             return (int) s.st_size;
-        }
 
         return -1;
 #endif
