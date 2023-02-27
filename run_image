@@ -1,0 +1,3 @@
+#!/bin/bash
+
+build/st80 -dir ./files -delay 1 -cycles 5000 -image $1

@@ -62,6 +62,92 @@
 #define RUNTIME_CHECK(cond) ((void)0)
 #endif
 
+
+// G&R pg. 664 - Object Table Related Constants
+// Object Table Segment (last segment) contains the Object Table followed by the
+// head of the OT free pointer list
+// +-------------------------+
+// |                         | <--- ObjectTableStart
+// |                         |
+// |                         |
+// |      Object Table       |
+// |                         |
+// |                         |
+// +-------------------------+
+// |     FreePointerList     |
+// +-------------------------+
+// |////// UNUSED WORD //////|
+// +-------------------------+
+//
+
+#define ObjectTableSegment  (SegmentCount - 1)
+#define ObjectTableStart    0
+#define ObjectTableSize     (SegmentSize - 2)
+// The smallest number that is too large to represent in an eight-bit count field; that is, 256.
+#define HugeSize    256 // G&R pg 661
+
+// The location of the head of the linked list of free object table entries
+#define FreePointerList (ObjectTableStart + ObjectTableSize) // G&R pg. 664
+
+// G&R pg. 664 - Object Table Related Constants
+// The smallest size of chunk that is not stored on a list whose chunk share the same size.
+// (Theindex of the last free chunk list).
+#define BigSize 20
+#define FirstFreeChunkListSize (BigSize + 1)
+
+// Heap Constants G&R pg. 658
+
+// The number of heaps segments used in the implementation.
+// We reserve the last segment for the Object Table and use the remaining for the heap
+#define HeapSegmentCount (SegmentCount - 1)
+
+// Each heap segment is organized as follows:
+//
+// +-------------------------+
+// |                         |
+// |                         |
+// |     Object Storage      |
+// |                         |
+// |                         |<--- HeapSpaceStop (last word)
+// +-------------------------+
+// |   Array of BigSize+1    |<--- FirstFreeChunkList
+// |   Free Chunks Linked    |
+// |   List Heads            |
+// |                         |<--- LastFreeChunkList
+// +-------------------------+
+//
+
+// The index of the first memory segmentused to store the heap
+#define FirstHeapSegment    0
+#define LastHeapSegment     (FirstHeapSegment + HeapSegmentCount - 1)
+
+// The address of the last location used in each heap segment.
+#define HeapSpaceStop   (SegmentSize - FirstFreeChunkListSize - 1)
+#define HeaderSize      (2) // The number of words in an object header(2).
+// If HeaderSize changes, revisit forAllOtherObjectsAccessibleFrom_suchThat_do
+// where we test if the offset passes the class field...
+
+// The location of the head of the linked list of free chunks of size zero. Comes right
+// after the last word for object storage.
+#define FirstFreeChunkList  (HeapSpaceStop + 1)
+
+// The bluebook incorrectly uses LastFreeChunkList in all places it is used! The
+// headOfFreeChunkList:inSegment: and headOfFreeChunkList:inSegment:put methods take
+// a SIZE as the first parameter not a location.
+// The location of the head of the linked list of free chunks of size BigSize or larger.
+// static const int LastFreeChunkList =  FirstFreeChunkList + BigSize;
+
+// Any sixteen-bit value that cannot be an object table index, e.g.,2**16~1.
+#define NonPointer  65535
+
+// Last special oop
+// (See SystemTracer in Smalltalk.sources)
+#define LastSpecialOop  52
+
+// Snapshots
+// Object space starts at offset 512 in the image
+#define ObjectSpaceBaseInImage  512
+
 #ifdef GC_MARK_SWEEP
 
 class IGCNotification {
@@ -73,77 +159,95 @@ public:
 	virtual void collectionCompleted() = 0;
 };
 
-#endif
-
 class ObjectMemory {
 public:
-#ifdef GC_MARK_SWEEP
-	
 	ObjectMemory(IHardwareAbstractionLayer *halInterface, IGCNotification *notification = 0);
 
 #else
-	ObjectMemory(IHardwareAbstractionLayer *halInterface);
+	class ObjectMemory {
+	public:
+		ObjectMemory(IHardwareAbstractionLayer *halInterface);
 #endif
 	
 	bool loadSnapshot(IFileSystem *fileSystem, const char *imageFileName);
 	
 	bool saveSnapshot(IFileSystem *fileSystem, const char *imageFileName);
 	
-	
 	// --- BCIInterface ---
-	
-	inline int oopsLeft() {
-		return freeOops;
-	}
-	
-	inline std::uint32_t coreLeft() {
-		return freeWords;
-	}
-	
+
+	#define oopsLeft ObjectMemory::freeOops
+	#define coreLeft ((std::uint32_t)ObjectMemory::freeWords)
 	
 	void garbageCollect();
 	
-	// storePointer:ofObject:withValue:
 	int storePointer_ofObject_withValue(int fieldIndex, int objectPointer, int valuePointer);
 	
-	// storeWord:ofObject:withValue:
 	int storeWord_ofObject_withValue(int wordIndex, int objectPointer, int valueWord);
 	
-	// increaseReferencesTo:
 	inline void increaseReferencesTo(int objectPointer) {
-		/* "source"
-		 self countUp: objectPointer
-		*/
+
 #ifdef GC_REF_COUNT
 		countUp(objectPointer);
 #endif
 	}
 	
-	// initialInstanceOf:
 	int initialInstanceOf(int classPointer);
 	
-	// decreaseReferencesTo:
 	inline void decreaseReferencesTo(int objectPointer) {
-		/* "source"
-		 self countDown: objectPointer
-		*/
+	
 #ifdef GC_REF_COUNT
 		countDown(objectPointer);
 #endif
 	}
 	
+// isIntegerValue:
+#define isIntegerValue(valueWord) (valueWord >= -16384 && valueWord <= 16383)
+
+#ifdef DEBUG
+#define cantBeIntegerObject(objectPointer) \
+			assert(!isIntegerObject(objectPointer)); \
+			if (isIntegerObject(objectPointer)) \
+				hal->error("A small integer has no object table entry");
+#else
+#define cantBeIntegerObject(objectPointer) \
+            isIntegerObject(objectPointer) ? hal->error("A small integer has no object table entry"):(void)0;
+#endif
 	
-	// isIntegerValue:
-	inline bool isIntegerValue(int valueWord) {
-		/* "source"
-		 "ERROR: G&R really cock this up"
-		 "dbanay - still broken in July 1985 ed!"
-		 ^valueWord >= -16384 and: [valueWord <= 16383]
-		*/
-		
-		return valueWord >= -16384 && valueWord <= 16383;
+	//isIntegerObject:	 ^(objectPointer bitAnd: 1) = 1
+#define isIntegerObject(objectPointer) (((objectPointer) & 1) == 1)
+	
+	inline int ot_bits_to(int objectPointer, int firstBitIndex, int lastBitIndex) {
+		// self cantBeIntegerObject: objectPointer.
+		// ^wordMemory segment: ObjectTableSegment
+		//	 word: ObjectTableStart + objectPointer
+		//	 bits: firstBitIndex
+		//	 to: lastBitIndex
+		cantBeIntegerObject(objectPointer);
+		return segment_word_bits_to(ObjectTableSegment,
+		                            ObjectTableStart + objectPointer,
+		                            firstBitIndex, lastBitIndex);
 	}
 	
+	//cantBeIntegerObject(objectPointer);
+#define locationBitsOf(objectPointer) \
+        (segment_word(ObjectTableSegment, ObjectTableStart + objectPointer + 1))
+
+#define segmentBitsOf(objectPointer)  ot_bits_to(objectPointer, 12, 15)
+
+#define heapChunkOf_byte(objectPointer, offset) \
+        segment_word_byte(segmentBitsOf(objectPointer), locationBitsOf(objectPointer) + offset / 2, offset % 2)
+
+#define heapChunkOf_word(objectPointer, offset) \
+        segment_word(segmentBitsOf(objectPointer), locationBitsOf(objectPointer) + offset)
+	
+	// ^self heapChunkOf: objectPointer word: 0
+#define sizeBitsOf(objectPointer) \
+         heapChunkOf_word(objectPointer, 0)
+	
+	inline int fetchWordLengthOf(int objectPointer) {
+		// ^(self sizeBitsOf: objectPointer) - HeaderSize
+		return sizeBitsOf(objectPointer) - HeaderSize;
+	}
 	
 	// fetchWord:ofObject:
 	inline int fetchWord_ofObject(int wordIndex, int objectPointer) {
@@ -155,42 +259,14 @@ public:
 		return heapChunkOf_word(objectPointer, HeaderSize + wordIndex);
 	}
 	
+	// integerValueOf: ^objectPointer/2
+	// Right shifting a negative number is undefined according to the standard.
+	// return ((std::int16_t) objectPointer) >> 1;
+#define  integerValueOf(objectPointer) ((std::int16_t) ((objectPointer) & 0xfffe) / 2)
 	
-	// integerValueOf:
-	inline int integerValueOf(int objectPointer) {
-		/* "source"
-			^objectPointer/2
-		*/
-		
-		
-		return (std::int16_t) (objectPointer & 0xfffe) / 2;
-		// Right shifting a negative number is undefined according to the standard.
-		// return ((std::int16_t) objectPointer) >> 1;
-	}
-	
-	// swapPointersOf:and:
 	void swapPointersOf_and(int firstPointer, int secondPointer);
 	
-	// fetchWordLengthOf:
-	inline int fetchWordLengthOf(int objectPointer) {
-		/* "source"
-		 ^(self sizeBitsOf: objectPointer) - HeaderSize
-		*/
-		
-		return sizeBitsOf(objectPointer) - HeaderSize;
-	}
-	
-	// instantiateClass:withWords:
 	int instantiateClass_withWords(int classPointer, int length);
-	
-	// isIntegerObject:
-	inline bool isIntegerObject(int objectPointer) {
-		/* "source"
-		 ^(objectPointer bitAnd: 1) = 1
-		*/
-		
-		return (objectPointer & 1) == 1;
-	}
 	
 	int instantiateClass_withBytes(int classPointer, int length);
 	
@@ -209,26 +285,36 @@ public:
 		return heapChunkOf_word(objectPointer, HeaderSize + fieldIndex);
 	}
 	
+	// ^wordMemory segment: (self segmentBitsOf: objectPointer)
+	//     word: ((self locationBitsOf: objectPointer) + offset)
+	
+	
+	// ^self heapChunkOf: objectPointer word: 1
+#define  classBitsOf(objectPointer) heapChunkOf_word(objectPointer, 1)
+	
 	inline int fetchClassOf(int objectPointer) {
-		/* Note that fetchClassOf:objectPointer returns IntegerClass (the object table index of SmallInteger)
-			if its argument is an immediate integer. G&R pg 686 */
-		/* "source"
-		 (self isIntegerObject: objectPointer)
-			 ifTrue: [^IntegerClass] "ERROR IntegerClass not defined"
-			 ifFalse: [^self classBitsOf: objectPointer]
-		*/
+		
+		// Note that fetchClassOf:objectPointer returns IntegerClass (the object table index of SmallInteger)
+		// if its argument is an immediate integer. G&R pg 686
+		
+		// (self isIntegerObject: objectPointer)
+		//	 ifTrue: [^IntegerClass] "ERROR IntegerClass not defined"
+		//	 ifFalse: [^self classBitsOf: objectPointer]
 		
 		if (isIntegerObject(objectPointer))
 			return ClassSmallInteger;
 		
 		return classBitsOf(objectPointer);
-		
 	}
 	
-	inline int integerObjectOf(int value) {
-		// ^(value bitShift: 1) + 1
-		return (std::uint16_t) ((value << 1) | 1);
-	}
+	//integerObjectOf: ^(value bitShift: 1) + 1
+#define integerObjectOf(value)  (((value) << 1) | 1)
+	
+	//  ^self ot: objectPointer bits: 8 to: 8
+#define oddBitOf(objectPointer) ot_bits_to(objectPointer, 8, 8)
+	
+	// ^self ot: objectPointer bits: 10 to: 10
+#define freeBitOf(objectPointer) ot_bits_to(objectPointer, 10, 10)
 	
 	inline int fetchByteLengthOf(int objectPointer) {
 		// "ERROR in selector of next line"
@@ -238,6 +324,14 @@ public:
 	
 	int instanceAfter(int objectPointer);
 	
+	inline int heapChunkOf_byte_put(int objectPointer, int offset, int value) {
+		// ^wordMemory segment: (self segmentBitsOf: objectPointer)
+		//     word: ((self locationBitsOf: objectPointer) + (offset//2))
+		//     byte: (offset\\2) put: value
+		return segment_word_byte_put(segmentBitsOf(objectPointer), locationBitsOf(objectPointer) + (offset / 2),
+		                             offset % 2, value);
+	}
+	
 	inline int storeByte_ofObject_withValue(int byteIndex, int objectPointer, int valueByte) {
 		// ^self heapChunkOf: objectPointer
 		//     byte: (HeaderSize*2 + byteIndex)
@@ -246,8 +340,7 @@ public:
 	}
 	
 	// --- ObjectPointers ---
-	
-	void cantBeIntegerObject(int objectPointer);
+
 
 #ifdef GC_MARK_SWEEP
 	
@@ -335,144 +428,7 @@ private:
 	
 	// --- ObjectTableEnt ---
 	
-	inline int segmentBitsOf(int objectPointer) {
-		// ^self ot: objectPointer bits: 12 to: 15
-		return ot_bits_to(objectPointer, 12, 15);
-	}
-	
-	inline int heapChunkOf_byte_put(int objectPointer, int offset, int value) {
-		
-		// ^wordMemory segment: (self segmentBitsOf: objectPointer)
-		//     word: ((self locationBitsOf: objectPointer) + (offset//2))
-		//     byte: (offset\\2) put: value
-		return wordMemory.segment_word_byte_put(segmentBitsOf(objectPointer),
-		                                        locationBitsOf(objectPointer) + (offset / 2), offset % 2, value);
-	}
-	
-	inline int pointerBitOf_put(int objectPointer, int value) {
-		// ^self ot: objectPointer bits: 9 to: 9 put: value
-		return ot_bits_to_put(objectPointer, 9, 9, value);
-	}
-	
-	inline int heapChunkOf_word(int objectPointer, int offset) {
-		// ^wordMemory segment: (self segmentBitsOf: objectPointer)
-		//     word: ((self locationBitsOf: objectPointer) + offset)
-		return wordMemory.segment_word(segmentBitsOf(objectPointer),
-		                               locationBitsOf(objectPointer) + offset);
-	}
-	
-	inline int segmentBitsOf_put(int objectPointer, int value) {
-		// ^self ot: objectPointer bits: 12 to: 15 put: value
-		return ot_bits_to_put(objectPointer, 12, 15, value);
-	}
-	
-	inline int heapChunkOf_word_put(int objectPointer, int offset, int value) {
-		// ^wordMemory segment: (self segmentBitsOf: objectPointer)
-		//     word: ((self locationBitsOf: objectPointer) + offset)
-		//     put: value
-		return wordMemory.segment_word_put(segmentBitsOf(objectPointer),
-		                                   locationBitsOf(objectPointer) + offset,
-		                                   value);
-	}
-	
-	inline int oddBitOf(int objectPointer) {
-		//  ^self ot: objectPointer bits: 8 to: 8
-		return ot_bits_to(objectPointer, 8, 8);
-	}
-	
-	inline int freeBitOf(int objectPointer) {
-		// ^self ot: objectPointer bits: 10 to: 10
-		return ot_bits_to(objectPointer, 10, 10);
-	}
-	
-	inline int locationBitsOf(int objectPointer) {
-		// self cantBeIntegerObject: objectPointer.
-		// ^wordMemory segment: ObjectTableSegment
-		//     word: ObjectTableStart + objectPointer + 1
-		
-		cantBeIntegerObject(objectPointer);
-		return wordMemory.segment_word(ObjectTableSegment,
-		                               ObjectTableStart + objectPointer + 1);
-	}
-	
-	inline int ot(int objectPointer) {
-		// self cantBeIntegerObject: objectPointer.
-		// ^wordMemory segment: ObjectTableSegment
-		//     word: ObjectTableStart + objectPointer
-		
-		cantBeIntegerObject(objectPointer);
-		return wordMemory.segment_word(ObjectTableSegment,
-		                               ObjectTableStart + objectPointer);
-	}
-	
-	inline int freeBitOf_put(int objectPointer, int value) {
-		// ^self ot: objectPointer bits: 10 to: 10 put: value
-		return ot_bits_to_put(objectPointer, 10, 10, value);
-	}
-	
-	inline int classBitsOf_put(int objectPointer, int value) {
-		// ^self heapChunkOf: objectPointer word: 1 put: value
-		return heapChunkOf_word_put(objectPointer, 1, value);
-	}
-	
-	inline int heapChunkOf_byte(int objectPointer, int offset) {
-		// ^wordMemory segment: (self segmentBitsOf: objectPointer)
-		//     word: ((self locationBitsOf: objectPointer) + (offset//2))
-		//     byte: (offset\\2)
-		return wordMemory.segment_word_byte(segmentBitsOf(objectPointer),
-		                                    locationBitsOf(objectPointer) + offset / 2,
-		                                    offset % 2);
-	}
-	
-	inline int locationBitsOf_put(int objectPointer, int value) {
-		
-		// self cantBeIntegerObject: objectPointer.
-		// ^wordMemory segment: ObjectTableSegment
-		//     word: ObjectTableStart + objectPointer + 1
-		//     put: value
-		cantBeIntegerObject(objectPointer);
-		return wordMemory.segment_word_put(ObjectTableSegment,
-		                                   ObjectTableStart + objectPointer + 1,
-		                                   value);
-	}
-	
-	inline int sizeBitsOf(int objectPointer) {
-		// ^self heapChunkOf: objectPointer word: 0
-		return heapChunkOf_word(objectPointer, 0);
-	}
-	
-	inline int oddBitOf_put(int objectPointer, int value) {
-		// ^self ot: objectPointer bits: 8 to: 8 put: value
-		return ot_bits_to_put(objectPointer, 8, 8, value);
-	}
-	
-	inline int ot_put(int objectPointer, int value) {
-		// self cantBeIntegerObject: objectPointer.
-		// ^wordMemory segment: ObjectTableSegment
-		//	 word: ObjectTableStart + objectPointer
-		//	 put: value
-		cantBeIntegerObject(objectPointer);
-		return wordMemory.segment_word_put(ObjectTableSegment,
-		                                   ObjectTableStart + objectPointer,
-		                                   value);
-	}
-	
-	inline int countBitsOf_put(int objectPointer, int value) {
-		// ^self ot: objectPointer bits: 0 to: 7 put: value
-		return ot_bits_to_put(objectPointer, 0, 7, value);
-	}
-	
-	inline int classBitsOf(int objectPointer) {
-		// ^self heapChunkOf: objectPointer word: 1
-		return heapChunkOf_word(objectPointer, 1);
-	}
-	
-	inline int countBitsOf(int objectPointer) {
-		// ^self ot: objectPointer bits: 0 to: 7
-		return ot_bits_to(objectPointer, 0, 7);
-	}
-	
-	inline int ot_bits_to_put(int objectPointer,int firstBitIndex,int lastBitIndex,int value) {
+	inline int ot_bits_to_put(int objectPointer, int firstBitIndex, int lastBitIndex, int value) {
 		
 		// self cantBeIntegerObject: objectPointer.
 		// ^wordMemory segment: ObjectTableSegment
@@ -481,34 +437,78 @@ private:
 		// 	 to: lastBitIndex
 		// 	 put: value
 		cantBeIntegerObject(objectPointer);
-		return wordMemory.segment_word_bits_to_put(ObjectTableSegment,
-		                                           ObjectTableStart + objectPointer,
-		                                           firstBitIndex,
-		                                           lastBitIndex,
-		                                           value);
+		return segment_word_bits_to_put(ObjectTableSegment, ObjectTableStart + objectPointer, firstBitIndex,
+		                                lastBitIndex, value);
 	}
 	
-	inline int sizeBitsOf_put(int objectPointer, int value) {
-		// ^self heapChunkOf: objectPointer word: 0 put: value
-		return heapChunkOf_word_put(objectPointer, 0, value);
+	
+	// ^self ot: objectPointer bits: 9 to: 9 put: value
+#define  pointerBitOf_put(objectPointer, value) ot_bits_to_put(objectPointer, 9, 9, value)
+	
+	// ^self ot: objectPointer bits: 12 to: 15 put: value
+#define  segmentBitsOf_put(objectPointer, value) ot_bits_to_put(objectPointer, 12, 15, value)
+	
+	inline int heapChunkOf_word_put(int objectPointer, int offset, int value) {
+		// ^wordMemory segment: (self segmentBitsOf: objectPointer)
+		//     word: ((self locationBitsOf: objectPointer) + offset)
+		//     put: value
+		return segment_word_put(segmentBitsOf(objectPointer), locationBitsOf(objectPointer) + offset, value);
 	}
 	
-	inline int ot_bits_to(int objectPointer, int firstBitIndex, int lastBitIndex) {
+	// self cantBeIntegerObject: objectPointer.
+	// ^wordMemory segment: ObjectTableSegment
+	//     word: ObjectTableStart + objectPointer + 1
+	
+	inline int ot(int objectPointer) {
+		// self cantBeIntegerObject: objectPointer.
+		// ^wordMemory segment: ObjectTableSegment
+		//     word: ObjectTableStart + objectPointer
+		
+		cantBeIntegerObject(objectPointer);
+		return segment_word(ObjectTableSegment, ObjectTableStart + objectPointer);
+	}
+	
+	// ^self ot: objectPointer bits: 10 to: 10 put: value
+#define freeBitOf_put(objectPointer, value) ot_bits_to_put(objectPointer, 10, 10, value)
+	
+	// ^self heapChunkOf: objectPointer word: 1 put: value
+#define classBitsOf_put(objectPointer, value) heapChunkOf_word_put(objectPointer, 1, value)
+	
+	
+	inline int locationBitsOf_put(int objectPointer, int value) {
+		
+		// self cantBeIntegerObject: objectPointer.
+		// ^wordMemory segment: ObjectTableSegment
+		//     word: ObjectTableStart + objectPointer + 1
+		//     put: value
+		cantBeIntegerObject(objectPointer);
+		return segment_word_put(ObjectTableSegment, ObjectTableStart + objectPointer + 1, value);
+	}
+	
+	// ^self ot: objectPointer bits: 8 to: 8 put: value
+#define oddBitOf_put(objectPointer, value) ot_bits_to_put(objectPointer, 8, 8, value)
+	
+	inline int ot_put(int objectPointer, int value) {
 		// self cantBeIntegerObject: objectPointer.
 		// ^wordMemory segment: ObjectTableSegment
 		//	 word: ObjectTableStart + objectPointer
-		//	 bits: firstBitIndex
-		//	 to: lastBitIndex
+		//	 put: value
 		cantBeIntegerObject(objectPointer);
-		return wordMemory.segment_word_bits_to(ObjectTableSegment,
-		                                       ObjectTableStart + objectPointer,
-		                                       firstBitIndex, lastBitIndex);
+		return segment_word_put(ObjectTableSegment, ObjectTableStart + objectPointer, value);
 	}
 	
-	inline int pointerBitOf(int objectPointer) {
-		// ^self ot: objectPointer bits: 9 to: 9
-		return ot_bits_to(objectPointer, 9, 9);
-	}
+	// ^self ot: objectPointer bits: 0 to: 7 put: value
+#define countBitsOf_put(objectPointer, value)  ot_bits_to_put(objectPointer, 0, 7, value);
+	
+	// ^self ot: objectPointer bits: 0 to: 7
+#define countBitsOf(objectPointer) ot_bits_to(objectPointer, 0, 7)
+	
+
+	// ^self heapChunkOf: objectPointer word: 0 put: value
+#define sizeBitsOf_put(objectPointer, value) heapChunkOf_word_put(objectPointer, 0, value)
+	
+	// ^self ot: objectPointer bits: 9 to: 9
+#define  pointerBitOf(objectPointer) ot_bits_to(objectPointer, 9, 9)
 	
 	// --- Allocation ---
 	
@@ -533,104 +533,18 @@ private:
 	}
 #endif
 
-private:
-	
-	RealWordMemory wordMemory;
+	public:
 	
 	// Special Register G&R pg. 667
 	// The index of the heap segment currently being used for allocation
-	int currentSegment;
-	int freeWords; // free words remaining (make primitiveFreeCore "fast")
+	static int currentSegment;
+	static int freeWords; // free words remaining (make primitiveFreeCore "fast")
 	
 	// An a table entry with a free bit set OR that contains a reference to a free chunk
 	// (free bit clear but count field zero) of memory is counted as a free oop
-	int freeOops;  // free OT entries (make primitiveFreeOops "fast")
+	static int freeOops;  // free OT entries (make primitiveFreeOops "fast")
 	
-	// G&R pg. 664 - Object Table Related Constants
-	// Object Table Segment (last segment) contains the Object Table followed by the
-	// head of the OT free pointer list
-	// +-------------------------+
-	// |                         | <--- ObjectTableStart
-	// |                         |
-	// |                         |
-	// |      Object Table       |
-	// |                         |
-	// |                         |
-	// +-------------------------+
-	// |     FreePointerList     |
-	// +-------------------------+
-	// |////// UNUSED WORD //////|
-	// +-------------------------+
-	//
-	
-	static const int ObjectTableSegment = RealWordMemory::SegmentCount - 1;
-	static const int ObjectTableStart = 0;
-	static const int ObjectTableSize = RealWordMemory::SegmentSize - 2;
-	// The smallest number that is too large to represent in an eight-bit count field; that is, 256.
-	static const int HugeSize = 256; // G&R pg 661
-	
-	// The location of the head of the linked list of free object table entries
-	static const int FreePointerList = ObjectTableStart + ObjectTableSize; // G&R pg. 664
-	
-	// G&R pg. 664 - Object Table Related Constants
-	// The smallest size of chunk that is not stored on a list whose chunk share the same size.
-	// (Theindex of the last free chunk list).
-	static const int BigSize = 20;
-	static const int FirstFreeChunkListSize = BigSize + 1;
-	
-	// Heap Constants G&R pg. 658
-	
-	// The number of heaps segments used in the implementation.
-	// We reserve the last segment for the Object Table and use the remaining for the heap
-	static const int HeapSegmentCount = RealWordMemory::SegmentCount - 1;
-	
-	// Each heap segment is organized as follows:
-	//
-	// +-------------------------+
-	// |                         |
-	// |                         |
-	// |     Object Storage      |
-	// |                         |
-	// |                         |<--- HeapSpaceStop (last word)
-	// +-------------------------+
-	// |   Array of BigSize+1    |<--- FirstFreeChunkList
-	// |   Free Chunks Linked    |
-	// |   List Heads            |
-	// |                         |<--- LastFreeChunkList
-	// +-------------------------+
-	//
-	
-	// The index of the first memory segmentused to store the heap
-	static const int FirstHeapSegment = 0;
-	static const int LastHeapSegment = FirstHeapSegment + HeapSegmentCount - 1;
-	
-	// The address of the last location used in each heap segment.
-	static const int HeapSpaceStop = RealWordMemory::SegmentSize - FirstFreeChunkListSize - 1;
-	static const int HeaderSize = 2; // The number of words in an object header(2).
-	// If HeaderSize changes, revisit forAllOtherObjectsAccessibleFrom_suchThat_do
-	// where we test if the offset passes the class field...
-	
-	// The location of the head of the linked list of free chunks of size zero. Comes right
-	// after the last word for object storage.
-	static const int FirstFreeChunkList = HeapSpaceStop + 1;
-	
-	// The bluebook incorrectly uses LastFreeChunkList in all places it is used! The
-	// headOfFreeChunkList:inSegment: and headOfFreeChunkList:inSegment:put methods take
-	// a SIZE as the first parameter not a location.
-	// The location of the head of the linked list of free chunks of size BigSize or larger.
-	// static const int LastFreeChunkList =  FirstFreeChunkList + BigSize;
-	
-	// Any sixteen-bit value that cannot be an object table index, e.g.,2**16~1.
-	static const int NonPointer = 65535;
-	
-	// Last special oop
-	// (See SystemTracer in Smalltalk.sources)
-	static const int LastSpecialOop = 52;
-	
-	// Snapshots
-	// Object space starts at offset 512 in the image
-	static const int ObjectSpaceBaseInImage = 512;
-	
+private:
 	bool loadObjectTable(IFileSystem *fileSystem, int fd);
 	
 	static bool padToPage(IFileSystem *fileSystem, int fd);

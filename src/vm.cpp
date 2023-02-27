@@ -147,7 +147,7 @@ void VirtualMachine::update_mouse_cursor(const std::uint16_t* cursor_bits)
 #endif
 
 void VirtualMachine::set_cursor_image(std::uint16_t *image) {
-// Set the cursor image  (a 16 word form)
+	// Set the cursor image  (a 16 word form)
 #ifdef SOFTWARE_MOUSE_CURSOR
 	if (!mouse_texture)
 		{
@@ -391,7 +391,10 @@ bool VirtualMachine::init() {
 }
 
 void VirtualMachine::queue_input_word(std::uint16_t word) {
+#ifdef DEBUG
 	assert(input_semaphore);
+#endif
+	
 	input_queue.push(word);
 	interpreter.asynchronousSignal(input_semaphore);
 }
@@ -436,47 +439,19 @@ void VirtualMachine::paste_clipboard() {
 }
 
 void VirtualMachine::handle_keyboard_event(const SDL_KeyboardEvent &key) {
-	/*
-	 decoded keyboard:
-	 
-	 A decoded keyboard consists of some independent keys and some “meta" keys (shift and escape)
-	 that cannot be detected on their own, but that change the value of the other keys. The keys
-	 on a decoded keyboard only indicate their down transition, not their up transition.
-	 For a decoded keyboard, the full shifted and “controlled" ASCII should be used as a parameter
-	 and successive type 3 and 4 words should be produced for each keystroke.
-	 
-	 undecoded keyboard:
-	 
-	 (independent keys with up/down detection)
-	 On an undecoded keyboard, the standard keys produce parameters that are the ASCII code
-	 of the character on the keytop without shift or control information (i.e., the key with “A”
-	 on it produces the ASCII for  “a” and the key with “2” and “@“ on it produces the ASCII for “2”).
-	 */
 	
-	// Map between a key scan code and it's shifted key value (if any)
-	static char shift_map[128] = {
-		0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-		11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-		21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
-		31, ' ', '!', '"', '#', '$', '%', '&', '"', '(',
-		')', '*', '+', '<', '_', '>', '?', ')', '!', '@',
-		'#', '$', '%', '^', '&', '*', '(', ':', ':', '<',
-		'+', '>', '?', '@', 'A', 'B', 'C', 'D', 'E', 'F',
-		'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-		'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-		'{', '|', '}', '^', '_', '~', 'A', 'B', 'C', 'D',
-		'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N',
-		'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
-		'Y', 'Z', '{', '|', '}', '~', 127
-	};
 	
 	std::uint16_t type = key.type == SDL_KEYDOWN ? 3 : 4;
 	std::uint16_t param = 0;
+	/*
+	 left shift 136 right shift 137 control 138 alpha-lock 139
+	 backspace 8 tab 9 line feed 10 return 13 escape 27 space 32 delete 127
+	 */
 	
-	// left shift 136 right shift 137 control 138 alpha-lock 139
-	// backspace 8 tab 9 line feed 10 return 13 escape 27 space 32 delete 127
+	//printf("%d:%d\n",key.keysym.scancode,key.keysym.mod );
 	
-	if (key.keysym.scancode == SDL_SCANCODE_V && key.keysym.mod == KMOD_LGUI) {
+	if ( key.keysym.mod == KMOD_LCTRL && key.keysym.scancode == SDL_SCANCODE_V ) {
+		printf("win+v\n");
 		if (type == 3)
 			paste_clipboard();
 		return;
@@ -513,9 +488,10 @@ void VirtualMachine::handle_keyboard_event(const SDL_KeyboardEvent &key) {
 			if (key.keysym.mod & (KMOD_LSHIFT | KMOD_RSHIFT))
 				param = shift_map[param];
 			
-			// For a decoded keyboard, the full shifted and “controlled" ASCII should be
-			// used as a parameter and successive type 3 and 4 words should be produced for each keystroke.
-			
+			/*
+			 For a decoded keyboard, the full shifted and “controlled" ASCII should be
+			 used as a parameter and successive type 3 and 4 words should be produced for each keystroke.
+			 */
 			queue_input_time_words();
 			queue_input_word(3, param);
 			queue_input_word(4, param);
@@ -526,6 +502,7 @@ void VirtualMachine::handle_keyboard_event(const SDL_KeyboardEvent &key) {
 		queue_input_time_words();
 		queue_input_word(type, param);
 	}
+	
 }
 
 void VirtualMachine::handle_mouse_button_event(const SDL_MouseButtonEvent &mouse) {

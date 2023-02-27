@@ -32,8 +32,22 @@
 // (it wasn't respecting the display scaling setting).
 //
 
-#include "conf.h"
 #include "vm.h"
+
+static void help(const std::string exe_name){
+	std::cout << "Smalltalk-80\n"
+			  << "usage: \n  "
+			  << exe_name << "' [-vsync,-delay,-cycles,-scale] -dir <root-directory> -image <image-file>\n"
+			  << "  -dir    : Root directory.\n"
+			  << "  -vsync  : Enable V-Sync\n"
+			  << "  -delay  : Add a delay between frames (in ms)\n"
+			  << "  -cycles : Cycles per frame (default:1800)\n"
+			  << "  -scale  : Override default 1x scale\n"
+			  << "  -three  : Enable three button mouse\n"
+			  << "  -help   : Show this message\n";
+	
+	exit(0);
+}
 
 static bool process_args(int argc, const char *argv[], struct options &options) {
 	if (argc < 3)
@@ -42,7 +56,7 @@ static bool process_args(int argc, const char *argv[], struct options &options) 
 	int arg = 1;
 	while (arg < argc) {
 		// directory option
-		if (strcmp(argv[arg], "-directory") == 0 && arg + 1 < argc) {
+		if (strcmp(argv[arg], "-dir") == 0 && arg + 1 < argc) {
 			arg++;
 			options.root_directory = argv[arg];
 			
@@ -69,15 +83,19 @@ static bool process_args(int argc, const char *argv[], struct options &options) 
 				return false;
 			options.cycles_per_frame = cycles;
 		}
-		else if (strcmp(argv[arg], "-2x") == 0) {
-			options.display_scale = 2;
+		else if (strcmp(argv[arg], "-scale") == 0 && arg + 1 < argc) {
+			arg++;
+			int scale = atoi(argv[arg]);
+			if (scale < 0)
+				return false;
+			options.display_scale = scale;
 		}
-		else if (strcmp(argv[arg], "-vsync") == 0) {
+		else if (strcmp(argv[arg], "-vsync") == 0)
 			options.vsync = true;
-		}
-		else if (strcmp(argv[arg], "-three") == 0) {
+		else if (strcmp(argv[arg], "-three") == 0)
 			options.three_buttons = true;
-		}
+		else if (strcmp(argv[arg], "-help") == 0)
+			help(argv[0]);
 		else
 			return false;
 		arg++;
@@ -95,15 +113,11 @@ int main(int argc, const char *argv[]) {
 	vm_options.three_buttons = true;
 	vm_options.vsync = false;
 	vm_options.novsync_delay = 0;  // Try -delay 8 arg if your CPU is unhappy
-	vm_options.cycles_per_frame = 5500;
+	vm_options.cycles_per_frame = 1800;
 	vm_options.display_scale = 1;
 	
-	if (!process_args(argc, argv, vm_options)) {
-		std::cerr << "usage: " << argv[0] <<
-		          " -directory root-directory [-vsync] [-delay ms] [-cycles cycles-per-frame] [-2x] [-image snapshot]"
-		          << std::endl;
-		exit(-1);
-	}
+	if (!process_args(argc, argv, vm_options))
+		help(argv[0]);
 	
 	VirtualMachine *vm = new VirtualMachine(vm_options);
 	if (vm->init())

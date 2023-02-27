@@ -33,6 +33,101 @@
 #include "hal.h"
 #include "bitblt.h"
 
+
+// initializePointIndices
+#define XIndex  0
+#define YIndex  1
+#define ClassPointSize  2
+
+// initializeStreamIndices
+#define StreamArrayIndex  0
+#define StreamIndexIndex  1
+#define StreamReadLimitIndex  2
+#define StreamWriteLimitIndex  3
+
+// initializeSchedulerIndices
+// Class ProcessorScheduler
+#define ProcessListsIndex  0
+#define ActiveProcessIndex  1
+
+// Class LinkedList
+#define FirstLinkIndex  0
+#define LastLinkIndex  1
+
+// Class Semaphore
+#define ExcessSignalsIndex  2
+
+// Class Link
+#define NextLinkIndex  0
+
+// Class Process
+#define SuspendedContextIndex  1
+#define PriorityIndex  2
+#define MyListIndex  3
+
+// initializeMessageIndices
+#define MessageSelectorIndex  0
+#define MessageArgumentsIndex  1
+#define MessageSize  2
+
+// initializeClassIndices
+
+// Class Class
+#define SuperclassIndex  0
+#define MessageDictionaryIndex  1
+#define InstanceSpecificationIndex  2
+
+// Fields of a message dictionary
+#define MethodArrayIndex  1
+#define SelectorStart  2
+
+// initializeSmallIntegers
+
+// SmallIntegers"
+#define MinusOnePointer  65535
+#define ZeroPointer  1
+#define OnePointer  3
+#define TwoPointer  5
+
+// initializeContextIndices
+
+// Class MethodContext
+#define SenderIndex  0
+#define InstructionPointerIndex  1
+#define StackPointerIndex  2
+#define MethodIndex  3
+#define ReceiverIndex  5
+#define TempFrameStart  6
+
+// Class BlockContext
+#define CallerIndex  0
+#define BlockArgumentCountIndex  3
+#define InitialIPIndex  4
+#define HomeIndex  5
+
+// initializeAssociationIndex
+#define ValueIndex  1
+
+// initializeCharacterIndex
+#define CharacterValueIndex  0
+
+// initializeMethodIndices
+
+// Class CompiledMethod
+#define HeaderIndex  0
+#define LiteralStart  1
+
+// Forms
+#define BitsInForm  0
+#define WidthInForm  1
+#define HeightInForm  2
+#define OffsetInForm  3
+
+// Files
+#define FileNameIndex 1    // fileName field of File
+
+
+
 class Interpreter
 #ifdef GC_MARK_SWEEP
 	: IGCNotification
@@ -288,6 +383,21 @@ private:
 	// --- Classes ---
 	
 	bool lookupMethodInDictionary(int dictionary);
+
+
+	#define extractBits_to_of( firstBitIndex,  lastBitIndex,  anInteger) \
+	    (((1 << (lastBitIndex - firstBitIndex + 1)) - 1) & anInteger >> (15 - lastBitIndex))
+	
+	//inline int extractBits_to_of(int firstBitIndex, int lastBitIndex, int anInteger) {
+	//	// ^(anInteger bitShift: lastBitIndex - 15)
+	//	//  bitAnd: (2 raisedTo: lastBitIndex - firstBitIndex + 1) - 1
+	//
+	//
+	//	std::uint16_t mask = (1 << (lastBitIndex - firstBitIndex + 1)) - 1;
+	//	std::uint16_t shift = anInteger >> (15 - lastBitIndex);
+	//	return shift & mask;
+	//
+	//}
 	
 	inline bool isPointers(int classPointer) {
 		int pointersFlag;
@@ -464,13 +574,11 @@ private:
 	void primitivePosixErrorStringOperation();
 	
 	// --- PrimitiveTest ---
-	
-	inline void success(bool successValue) {
 		/* "source"
 		 success <- successValue & success
 		 */
-		successFlag = successFlag && successValue;
-	}
+	#define set_success(successValue) \
+		Interpreter::successFlag = successFlag && successValue
 	
 	void dispatchPrimitives();
 	
@@ -479,17 +587,11 @@ private:
 	std::uint32_t positive32BitValueOf(int integerPointer);
 	
 	inline void initPrimitive() {
-		/* "source"
-		 success <- true
-		 */
-		
+		// success <- true
 		successFlag = true;
 	}
-	
-	inline bool success() {
-		 // ^success
-		return successFlag;
-	}
+
+	#define success()  Interpreter::successFlag
 	
 	bool primitiveResponse();
 	
@@ -504,10 +606,8 @@ private:
 	}
 	
 	inline void pushInteger(int integerValue) {
-		/* "source"
-			self push: (memory integerObjectOf: integerValue)
-		*/
-		push(memory.integerObjectOf(integerValue));
+		//	self push: (memory integerObjectOf: integerValue)
+		push(integerObjectOf(integerValue));
 	}
 	
 	// quickReturnSelf
@@ -692,37 +792,22 @@ private:
 	int methodClassOf(int methodPointer);
 	
 	inline int literal_ofMethod(int offset, int methodPointer) {
-		/* "source"
-			^memory fetchPointer: offset + LiteralStart
-				ofObject: methodPointer
-		*/
-		
+		//^memory fetchPointer: offset + LiteralStart	ofObject: methodPointer
 		return memory.fetchPointer_ofObject(offset + LiteralStart, methodPointer);
 	}
 	
 	inline int temporaryCountOf(int methodPointer) {
-		/* "source"
-			^self extractBits: 3 to: 7
-				of: (self headerOf: methodPointer)
-		*/
-		
+		//	^self extractBits: 3 to: 7 of: (self headerOf: methodPointer)
 		return extractBits_to_of(3, 7, headerOf(methodPointer));
 	}
 	
 	inline int largeContextFlagOf(int methodPointer) {
-		/* "source"
-			^self extractBits: 8 to: 8
-				of: (self headerOf: methodPointer)
-		*/
-		
+		//	^self extractBits: 8 to: 8	of: (self headerOf: methodPointer)
 		return extractBits_to_of(8, 8, headerOf(methodPointer));
 	}
 	
 	inline int objectPointerCountOf(int methodPointer) {
-		/* "source"
-			^(self literalCountOf: methodPointer) + LiteralStart
-		*/
-		
+		//	^(self literalCountOf: methodPointer) + LiteralStart
 		return literalCountOf(methodPointer) + LiteralStart;
 	}
 	
@@ -730,7 +815,7 @@ private:
 		int literalCount;
 		
 		/* "source"
-			literalCount <- self literalCountOf: methodPointer.
+			literalCount := self literalCountOf: methodPointer.
 			^self literal: literalCount - 2
 				ofMethod: methodPointer
 		*/
@@ -762,7 +847,7 @@ private:
 		int fieldIndex;
 		
 		/* "source"
-			fieldIndex <- self extractBits: 11 to: 15
+			fieldIndex := self extractBits: 11 to: 15
 					of: currentBytecode.
 			self pushLiteralVariable: fieldIndex
 		*/
@@ -815,7 +900,7 @@ private:
 		int fieldIndex;
 		
 		/* "source"
-			fieldIndex <- self extractBits: 12 to: 15
+			fieldIndex := self extractBits: 12 to: 15
 					of: currentBytecode.
 			self pushReceiverVariable: fieldIndex
 		*/
@@ -857,7 +942,7 @@ private:
 		int fieldIndex;
 		
 		/* "source"
-			fieldIndex <- self extractBits: 12 to: 15
+			fieldIndex := self extractBits: 12 to: 15
 					of: currentBytecode.
 			self pushTemporaryVariable: fieldIndex
 		*/
@@ -870,7 +955,7 @@ private:
 		int association;
 		
 		/* "source"
-			association <- self literal: literalIndex.
+			association := self literal: literalIndex.
 			self push: (memory fetchPointer: ValueIndex
 					ofObject: association)
 		*/
@@ -893,7 +978,7 @@ private:
 		int offset;
 		
 		/* "source"
-			offset <- self extractBits: 13 to: 15
+			offset := self extractBits: 13 to: 15
 					of: currentBytecode.
 			self jump: offset + 1
 		*/
@@ -904,7 +989,7 @@ private:
 	
 	inline void jump(int offset) {
 		/* "source"
-			instructionPointer <- instructionPointer + offset
+			instructionPointer := instructionPointer + offset
 		*/
 		
 		instructionPointer = instructionPointer + offset;
@@ -918,7 +1003,7 @@ private:
 		int offset;
 		
 		/* "source"
-			offset <- self extractBits: 13 to: 15
+			offset := self extractBits: 13 to: 15
 					of: currentBytecode.
 			self jump: offset - 4 * 256 + self fetchByte
 		*/
@@ -932,7 +1017,7 @@ private:
 		int offset;
 		
 		/* "source"
-			offset <- self extractBits: 13 to: 15
+			offset := self extractBits: 13 to: 15
 					of: currentBytecode.
 			self jumpIf: FalsePointer
 				by: offset + 1
@@ -945,18 +1030,7 @@ private:
 	// --- IntegerAccess ---
 	
 	void storeInteger_ofObject_withValue(int fieldIndex, int objectPointer, int integerValue);
-	
-	inline int extractBits_to_of(int firstBitIndex, int lastBitIndex, int anInteger) {
-		/* "source"
-		 ^(anInteger bitShift: lastBitIndex - 15)
-		 bitAnd: (2 raisedTo: lastBitIndex - firstBitIndex + 1) - 1
-		 */
-		
-		std::uint16_t mask = (1 << (lastBitIndex - firstBitIndex + 1)) - 1;
-		std::uint16_t shift = anInteger >> (15 - lastBitIndex);
-		return shift & mask;
-		
-	}
+
 	
 	void transfer_fromIndex_ofObject_toIndex_ofObject(
 		int count,
@@ -966,35 +1040,27 @@ private:
 		int toOop);
 	
 	inline int lowByteOf(int anInteger) {
-		/* "source"
-			^self extractBits: 8 to: 15
-				of: anInteger
-		*/
-		
+		//	^self extractBits: 8 to: 15 of: anInteger
 		return extractBits_to_of(8, 15, anInteger);
 	}
 	
 	int fetchInteger_ofObject(int fieldIndex, int objectPointer);
 	
 	inline int highByteOf(int anInteger) {
-		/* "source"
-			^self extractBits: 0 to: 7
-				of: anInteger
-		*/
+		//	^self extractBits: 0 to: 7 of: anInteger
 		return extractBits_to_of(0, 7, anInteger);
 	}
 	
 	// --- StoreMgmtPrims ---
 	
 	inline void checkInstanceVariableBoundsOf_in(int index, int object) {
-		/* "source"
-			class <- memory fetchClassOf: object.
-			self success: index >= 1.
-			self success: index <= (self lengthOf: object)
-		*/
+		
+		//	class := memory fetchClassOf: object.
+		//	self success: index >= 1.
+		//	self success: index <= (self lengthOf: object)
 		//cls = memory.fetchClassOf(object);
-		success(index >= 1);
-		success(index <= lengthOf(object));
+		set_success(index >= 1);
+		set_success(index <= lengthOf(object));
 	}
 	
 	void primitiveNewMethod();
@@ -1047,148 +1113,56 @@ private:
 
 private:
 	
-	// initializePointIndices
-	static const int XIndex = 0;
-	static const int YIndex = 1;
-	static const int ClassPointSize = 2;
-	
-	// initializeStreamIndices
-	static const int StreamArrayIndex = 0;
-	static const int StreamIndexIndex = 1;
-	static const int StreamReadLimitIndex = 2;
-	static const int StreamWriteLimitIndex = 3;
-	
-	// initializeSchedulerIndices
-	// Class ProcessorScheduler
-	static const int ProcessListsIndex = 0;
-	static const int ActiveProcessIndex = 1;
-
-	// Class LinkedList
-	static const int FirstLinkIndex = 0;
-	static const int LastLinkIndex = 1;
-
-	// Class Semaphore
-	static const int ExcessSignalsIndex = 2;
-
-	// Class Link
-	static const int NextLinkIndex = 0;
-
-	// Class Process
-	static const int SuspendedContextIndex = 1;
-	static const int PriorityIndex = 2;
-	static const int MyListIndex = 3;
-	
-	// initializeMessageIndices
-	static const int MessageSelectorIndex = 0;
-	static const int MessageArgumentsIndex = 1;
-	static const int MessageSize = 2;
-	
-	// initializeClassIndices
-
-	// Class Class
-	static const int SuperclassIndex = 0;
-	static const int MessageDictionaryIndex = 1;
-	static const int InstanceSpecificationIndex = 2;
-
-	// Fields of a message dictionary
-	static const int MethodArrayIndex = 1;
-	static const int SelectorStart = 2;
-	
-	// initializeSmallIntegers
-
-	// SmallIntegers"
-	static const int MinusOnePointer = 65535;
-	static const int ZeroPointer = 1;
-	static const int OnePointer = 3;
-	static const int TwoPointer = 5;
-	
-	// initializeContextIndices
-
-	// Class MethodContext
-	static const int SenderIndex = 0;
-	static const int InstructionPointerIndex = 1;
-	static const int StackPointerIndex = 2;
-	static const int MethodIndex = 3;
-	static const int ReceiverIndex = 5;
-	static const int TempFrameStart = 6;
-
-	// Class BlockContext
-	static const int CallerIndex = 0;
-	static const int BlockArgumentCountIndex = 3;
-	static const int InitialIPIndex = 4;
-	static const int HomeIndex = 5;
-	
-	// initializeAssociationIndex
-	static const int ValueIndex = 1;
-	
-	// initializeCharacterIndex
-	static const int CharacterValueIndex = 0;
-	
-	// initializeMethodIndices
-
-	// Class CompiledMethod
-	static const int HeaderIndex = 0;
-	static const int LiteralStart = 1;
-	
-	// Forms
-	static const int BitsInForm = 0;
-	static const int WidthInForm = 1;
-	static const int HeightInForm = 2;
-	static const int OffsetInForm = 3;
-	
-	// Files
-	static const int FileNameIndex = 1;    // fileName field of File
-	
 	// "Registers"
-	int activeContext;
-	int homeContext;
-	int method;
-	int receiver;
-	int instructionPointer;
-	int stackPointer;
-	int currentBytecode;
-	bool successFlag;
+	static int activeContext;
+	static int homeContext;
+	static int method;
+	static int receiver;
+	static int instructionPointer;
+	static int stackPointer;
+	static int currentBytecode;
+	static bool successFlag;
 	
 	// Class related registers
-	int messageSelector;
-	int argumentCount;
-	int newMethod;
-	int primitiveIndex;
+	static int messageSelector;
+	static int argumentCount;
+	static int newMethod;
+	static int primitiveIndex;
 	
 	// Process-related Registers (pg 642)
 	// The newProcessWaiting register will be true if a process switch is called for and false otherwise.
-	bool newProcessWaiting;
+	static bool newProcessWaiting;
 	
 	// If newProcessWaiting is true then the newProcess register will point to the Process to be transferred to.
-	int newProcess;
+	static int newProcess;
 	
 	// The semaphoreList register points to an Array used by the interpreter to buffer Semaphores that should be signaled.
 	// This is an Array in Interpreter, not in the object memory. It will be a table in a machine-language interpreter.
 	
-	int semaphoreList[4096];
+	static int semaphoreList[4096];
 	
 	// The semaphoreIndex register hold the index of the last Semaphore in the semaphoreList buffer.
-	int semaphoreIndex;
+	static int semaphoreIndex;
 	
 	// Using an array of int for method cache to remain faithful as possible to the bluebook
 	// Any size change will require changes to hash function in findNewMethodInClass
-	int methodCache[1024];
+	static int methodCache[1024];
 	
 	ObjectMemory memory;
 	
 	// dbanay - primitiveSignalAtOopsLeftWordsLeft support
-	bool checkLowMemory;
-	bool memoryIsLow;
-	int lowSpaceSemaphore;
-	int oopsLeftLimit;
+	static bool checkLowMemory;
+	static bool memoryIsLow;
+	static int lowSpaceSemaphore;
+	static int oopsLeftLimit;
 	std::uint32_t wordsLeftLimit;
 	
 	IHardwareAbstractionLayer *hal;
 	IFileSystem *fileSystem;
-	int currentDisplay;
-	int currentDisplayWidth;
-	int currentDisplayHeight;
-	int currentCursor;
+	static int currentDisplay;
+	static int currentDisplayWidth;
+	static int currentDisplayHeight;
+	static int currentCursor;
 	
 	// Return a std::string for a string or symbol oop
 	std::string stringFromObject(int strOop);

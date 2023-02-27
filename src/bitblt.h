@@ -90,16 +90,16 @@ public:
 
         if (sourceForm != NilPointer)
         {
-            sourceFormWidth = memory.integerValueOf(memory.fetchWord_ofObject(WidthInForm, sourceForm));
-            sourceFormHeight = memory.integerValueOf(memory.fetchWord_ofObject(HeightInForm, sourceForm));
+            sourceFormWidth = integerValueOf(memory.fetchWord_ofObject(WidthInForm, sourceForm));
+            sourceFormHeight = integerValueOf(memory.fetchWord_ofObject(HeightInForm, sourceForm));
         }
         else
         {
             sourceX = sourceY = 0;
             sourceFormHeight = sourceFormWidth = 0;
         }
-        destFormWidth = memory.integerValueOf(memory.fetchWord_ofObject(WidthInForm, destForm));
-        destFormHeight = memory.integerValueOf(memory.fetchWord_ofObject(HeightInForm, destForm));
+        destFormWidth = integerValueOf(memory.fetchWord_ofObject(WidthInForm, destForm));
+        destFormHeight = integerValueOf(memory.fetchWord_ofObject(HeightInForm, destForm));
         updatedX = 0;
         updatedY = 0;
         updatedWidth = 0;
