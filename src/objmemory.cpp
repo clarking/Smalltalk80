@@ -26,27 +26,27 @@
 //
 
 
-#include <cstdint>
+
 #include <algorithm>
 #include "objmemory.h"
 #include "oops.h"
 
 #ifndef GC_REF_COUNT
-	#ifndef GC_MARK_SWEEP
-		#error "must define GC_REF_COUNT and/or GC_MARK_SWEEP"
-	#endif
+#ifndef GC_MARK_SWEEP
+#error "must define GC_REF_COUNT and/or GC_MARK_SWEEP"
+#endif
 #endif
 
 
 ObjectMemory::ObjectMemory(
 	IHardwareAbstractionLayer *halInterface
-	#ifdef GC_MARK_SWEEP
+#ifdef GC_MARK_SWEEP
 	, IGCNotification *notification
-	#endif
+#endif
                           ) : currentSegment(-1), freeWords(0), freeOops(0) {
-	#ifdef GC_MARK_SWEEP
+#ifdef GC_MARK_SWEEP
 	gcNotification = notification;
-	#endif
+#endif
 	hal = halInterface;
 }
 
@@ -55,18 +55,20 @@ bool ObjectMemory::loadObjectTable(IFileSystem *fileSystem, int fd) {
 	// First two 32-bit values have the object space length and object table lengths in words
 	std::int32_t objectTableLength;
 	
-	if(fileSystem->seek_to(fd, 4)==-1) // Skip over object space length
+	if (fileSystem->seek_to(fd, 4) == -1) // Skip over object space length
 		return false;
-	if(fileSystem->read(fd, (char *) &objectTableLength, sizeof(objectTableLength))!=sizeof(objectTableLength))
+	
+	if (fileSystem->read(fd, (char *) &objectTableLength, sizeof(objectTableLength)) != sizeof(objectTableLength))
 		return false;
+	
 	int fileSize = fileSystem->file_size(fd);
 	
-	if(fileSystem->seek_to(fd, fileSize - objectTableLength * 2)==-1) // Reposition to start of object table
+	if (fileSystem->seek_to(fd, fileSize - objectTableLength * 2) == -1) // Reposition to start of object table
 		return false;
 	
 	for (int objectPointer = 0; objectPointer < objectTableLength; objectPointer += 2) {
 		std::uint16_t words[2];
-		if(fileSystem->read(fd, (char *) &words, sizeof(words))!=sizeof(words))
+		if (fileSystem->read(fd, (char *) &words, sizeof(words)) != sizeof(words))
 			return false;
 		ot_put(objectPointer, words[0]);
 		locationBitsOf_put(objectPointer, words[1]);
@@ -85,11 +87,10 @@ bool ObjectMemory::loadObjectTable(IFileSystem *fileSystem, int fd) {
 	// Why? Makes the OT easier to see in debugger.
 	// Note we skip oop 0, which is considered reserved and invalid. (page 2, Xerox Virtual Image booklet)
 	for (int objectPointer = ObjectTableSize - 2; objectPointer >= 2; objectPointer -= 2)
-		if(freeBitOf(objectPointer))
+		if (freeBitOf(objectPointer))
 			toFreePointerListAdd(objectPointer);
 	
 	freeOops = auditFreeOops();
-	
 	return true;
 }
 
@@ -104,33 +105,33 @@ bool ObjectMemory::loadObjects(IFileSystem *fileSystem, int fd) {
 	
 	// Load objects from the virtual image into the heap segments
 	// being careful to not split an object across a segment boundary
+	
 	int destinationSegment = FirstHeapSegment, destinationWord = 0;
 	
 	for (int objectPointer = 2; objectPointer < ObjectTableSize; objectPointer += 2) {
-		if(freeBitOf(objectPointer))
+		if (freeBitOf(objectPointer))
 			continue;
+		
 		// A free chunk has it's COUNT field set to zero but the free bit is clear
-		assert (countBitsOf(objectPointer)!=0); // SANITY Make sure a freeChunk wasn't saved!
+		assert (countBitsOf(objectPointer) != 0); // SANITY Make sure a freeChunk wasn't saved!
 		
 		// On disk objects are stored contiguously as if a large 20-bit WORD addressed space
 		// In this scheme, the OT segment and locations combine to form a WORD address
-		const int objectImageWordAddress = (segmentBitsOf(objectPointer) << 16)
-		                                   + locationBitsOf(objectPointer);
+		const int objectImageWordAddress = (segmentBitsOf(objectPointer) << 16) + locationBitsOf(objectPointer);
 		
 		fileSystem->seek_to(fd, ObjectSpaceBaseInImage + objectImageWordAddress * sizeof(std::uint16_t));
 		
 		std::uint16_t objectSize;
 		fileSystem->read(fd, (char *) &objectSize, sizeof(objectSize));
 		
-		
 		// Account for the extra word used by HugeSize objects
-		int extraSpace = objectSize < HugeSize || pointerBitOf(objectPointer)==0 ? 0 : 1;
+		int extraSpace = objectSize < HugeSize || pointerBitOf(objectPointer) == 0 ? 0 : 1;
 		int space = objectSize + extraSpace; // space in memory
 		
-		if(space > heapSpaceRemaining[destinationSegment - FirstHeapSegment]) {
+		if (space > heapSpaceRemaining[destinationSegment - FirstHeapSegment]) {
 			// No room left in the current segment, move to next
 			destinationSegment++;
-			if(destinationSegment==HeapSegmentCount)
+			if (destinationSegment == HeapSegmentCount)
 				return false; // Full
 			destinationWord = 0;
 		}
@@ -141,7 +142,6 @@ bool ObjectMemory::loadObjects(IFileSystem *fileSystem, int fd) {
 		
 		// Store the object in the image into word memory
 		// First comes the size...
-		
 		sizeBitsOf_put(objectPointer, objectSize);
 		
 		// Next is the class...
@@ -159,7 +159,6 @@ bool ObjectMemory::loadObjects(IFileSystem *fileSystem, int fd) {
 		}
 		
 		destinationWord += space;
-		
 		heapSpaceRemaining[destinationSegment - FirstHeapSegment] -= space;
 	}
 	
@@ -170,14 +169,16 @@ bool ObjectMemory::loadObjects(IFileSystem *fileSystem, int fd) {
 	}
 	
 	freeWords = 0;
+	
 	// Place any remaining space in each segment onto it's free chunk list, which is
 	// is a linked list of object pointers.
 	// The chunks are linked using the class field of an object. The size field of
 	// the object contains the actual size of the free chunk.
+	
 	for (int segment = FirstHeapSegment; segment <= LastHeapSegment; segment++) {
 		int freeChunkSize = heapSpaceRemaining[segment - FirstHeapSegment];
 		freeWords += freeChunkSize;
-		if(freeChunkSize >= HeaderSize) {
+		if (freeChunkSize >= HeaderSize) {
 			int freeChunkLocation = SegmentHeapSpaceSize - freeChunkSize;
 			// G&R pg 665 - each free chunk has an OT entry
 			currentSegment = segment; // Set special segment register
@@ -192,9 +193,8 @@ bool ObjectMemory::loadObjects(IFileSystem *fileSystem, int fd) {
 
 bool ObjectMemory::loadSnapshot(IFileSystem *fileSystem, const char *fileName) {
 	int fd = fileSystem->open_file(fileName);
-	if(fd==-1)
+	if (fd == -1)
 		return false;
-	
 	bool succeeded = loadObjectTable(fileSystem, fd) && loadObjects(fileSystem, fd);
 	fileSystem->close_file(fd);
 	return succeeded;
@@ -208,7 +208,7 @@ bool ObjectMemory::padToPage(IFileSystem *fileSystem, int fd) {
 	
 	int pad = (desired - pos) / sizeof(word);
 	while (pad-- > 0)
-		if(fileSystem->write(fd, (char *) &word, sizeof(word))!=sizeof(word))
+		if (fileSystem->write(fd, (char *) &word, sizeof(word)) != sizeof(word))
 			return false;
 	
 	return true;
@@ -216,7 +216,7 @@ bool ObjectMemory::padToPage(IFileSystem *fileSystem, int fd) {
 
 bool ObjectMemory::saveSnapshot(IFileSystem *fileSystem, const char *imageFileName) {
 	int fd = fileSystem->create_file(imageFileName);
-	if(fd==-1)
+	if (fd == -1)
 		return false;
 	
 	bool success = saveObjects(fileSystem, fd);
@@ -229,7 +229,7 @@ bool ObjectMemory::saveObjects(IFileSystem *fileSystem, int fd) {
 	// the last OT entry that references an object
 	int lastUsedObjectPointer = NonPointer;
 	for (int objectPointer = 2; objectPointer < ObjectTableSize; objectPointer += 2) {
-		if(hasObject(objectPointer))
+		if (hasObject(objectPointer))
 			lastUsedObjectPointer = objectPointer;
 	}
 	
@@ -237,21 +237,21 @@ bool ObjectMemory::saveObjects(IFileSystem *fileSystem, int fd) {
 	std::int32_t placeHolder[2] = {0};
 	
 	// Write place holder value for object space length and object table length
-	if(fileSystem->write(fd, (char *) &placeHolder, sizeof(placeHolder))!=sizeof(placeHolder))
+	if (fileSystem->write(fd, (char *) &placeHolder, sizeof(placeHolder)) != sizeof(placeHolder))
 		return false;
 	
 	// Write two zero bytes indicating interchange format
 	std::uint8_t interchange[2] = {0};
-	if(fileSystem->write(fd, (char *) &interchange, sizeof(interchange))!=sizeof(interchange))
+	if (fileSystem->write(fd, (char *) &interchange, sizeof(interchange)) != sizeof(interchange))
 		return false;
 	
-	if(!padToPage(fileSystem, fd)) // Advance to next page before writing objects
+	if (!padToPage(fileSystem, fd)) // Advance to next page before writing objects
 		return false;
 	
 	// Write objects
 	std::int32_t objectSpaceLength = 0;
 	for (int objectPointer = 2; objectPointer < storedObjectTableLength; objectPointer += 2) {
-		if(!hasObject(objectPointer))
+		if (!hasObject(objectPointer))
 			continue;
 		
 		// Write object to file... N.B. we do not store the extra word for HugeSize objects
@@ -260,19 +260,19 @@ bool ObjectMemory::saveObjects(IFileSystem *fileSystem, int fd) {
 		header[0] = objectSize;
 		header[1] = (std::uint16_t) fetchClassOf(objectPointer);
 		
-		if(fileSystem->write(fd, (char *) &header, sizeof(header))!=sizeof(header))
+		if (fileSystem->write(fd, (char *) &header, sizeof(header)) != sizeof(header))
 			return false;
 		
 		int wordLengthOfObject = fetchWordLengthOf(objectPointer);
 		for (int wordIndex = 0; wordIndex < wordLengthOfObject; wordIndex++) {
 			std::uint16_t word = (std::uint16_t) fetchWord_ofObject(wordIndex, objectPointer);
-			if(fileSystem->write(fd, (char *) &word, sizeof(word))!=sizeof(word))
+			if (fileSystem->write(fd, (char *) &word, sizeof(word)) != sizeof(word))
 				return false;
 		}
 		objectSpaceLength += objectSize;
 	}
 	
-	if(!padToPage(fileSystem, fd)) // Advance to next page before writing object table
+	if (!padToPage(fileSystem, fd)) // Advance to next page before writing object table
 		return false;
 	
 	// Write object table
@@ -281,15 +281,15 @@ bool ObjectMemory::saveObjects(IFileSystem *fileSystem, int fd) {
 		std::uint16_t oldOTValue = ot(objectPointer);
 		std::uint16_t oldOTLocation = locationBitsOf(objectPointer);
 		
-		if(objectPointer >= 2) {
-			if(!freeBitOf(objectPointer) && countBitsOf(objectPointer)==0) {
+		if (objectPointer >= 2) {
+			if (!freeBitOf(objectPointer) && countBitsOf(objectPointer) == 0) {
 				// This entry was for a free chunk of memory, but we don't save
 				// free space in the image. Store as a
 				// an available OT entry by setting free bit
 				freeBitOf_put(objectPointer, 1);
 			}
 			
-			if(freeBitOf(objectPointer)) {
+			if (freeBitOf(objectPointer)) {
 				// manual.pdf - page 3: free entries have freeBit set and other bits in both
 				// words are 0.
 				ot_put(objectPointer, 0);
@@ -317,7 +317,7 @@ bool ObjectMemory::saveObjects(IFileSystem *fileSystem, int fd) {
 		locationBitsOf_put(objectPointer, oldOTLocation);
 		
 		// Write this entry
-		if(fileSystem->write(fd, (char *) &words, sizeof(words))!=sizeof(words))
+		if (fileSystem->write(fd, (char *) &words, sizeof(words)) != sizeof(words))
 			return false;
 	}
 	
@@ -328,8 +328,9 @@ bool ObjectMemory::saveObjects(IFileSystem *fileSystem, int fd) {
 	return true;
 }
 
-// sweepCurrentSegmentFrom:
 int ObjectMemory::sweepCurrentSegmentFrom(int lowWaterMark) {
+	// sweepCurrentSegmentFrom:
+	
 	int si;
 	int di;
 	int objectPointer;
@@ -371,7 +372,7 @@ int ObjectMemory::sweepCurrentSegmentFrom(int lowWaterMark) {
 	si = di = lowWaterMark;
 	while (si < HeapSpaceStop)  // for each object, si
 	{
-		if(wordMemory.segment_word(currentSegment, si + 1)==NonPointer) {
+		if (wordMemory.segment_word(currentSegment, si + 1) == NonPointer) {
 			// Unallocated, so skip it (see abandonFreeChunksInSegment)
 			size = wordMemory.segment_word(currentSegment, si);
 			si = si + size;
@@ -387,10 +388,7 @@ int ObjectMemory::sweepCurrentSegmentFrom(int lowWaterMark) {
 			int limit = spaceOccupiedBy(objectPointer);
 			for (int i = 2; i <= limit; i++) // move the rest of the object (already wrote size via sizeBitsOf_put)
 			{
-				wordMemory.segment_word_put(
-					currentSegment, di,
-					wordMemory.segment_word(currentSegment, si));
-				
+				wordMemory.segment_word_put(currentSegment, di, wordMemory.segment_word(currentSegment, si));
 				si++;
 				di++;
 			}
@@ -399,9 +397,10 @@ int ObjectMemory::sweepCurrentSegmentFrom(int lowWaterMark) {
 	return di;
 }
 
-
-// compactCurrentSegment
 void ObjectMemory::compactCurrentSegment() {
+	
+	// compactCurrentSegment
+	
 	int lowWaterMark;
 	int bigSpace;
 	
@@ -416,36 +415,33 @@ void ObjectMemory::compactCurrentSegment() {
 	*/
 	
 	RUNTIME_CHECK(currentSegment >= FirstHeapSegment && currentSegment <= LastHeapSegment);
-	
 	lowWaterMark = abandonFreeChunksInSegment(currentSegment);
-	if(lowWaterMark < HeapSpaceStop) {
+	if (lowWaterMark < HeapSpaceStop) {
 		reverseHeapPointersAbove(lowWaterMark);
 		bigSpace = sweepCurrentSegmentFrom(lowWaterMark);
 		deallocate(obtainPointer_location(HeapSpaceStop + 1 - bigSpace, bigSpace));
 	}
 }
 
-// Force a garbage collection
 void ObjectMemory::garbageCollect() {
-	#ifdef GC_MARK_SWEEP
+	// Force a garbage collection
+#ifdef GC_MARK_SWEEP
 	reclaimInaccessibleObjects();
-	#endif
+#endif
 }
 
-
-// releasePointer:
 void ObjectMemory::releasePointer(int objectPointer) {
-	/* "source"
-		self freeBitOf: objectPointer put: 1.
-		self toFreePointerListAdd: objectPointer
-	*/
+	// releasePointer:
+	
+	//	self freeBitOf: objectPointer put: 1.
+	//	self toFreePointerListAdd: objectPointer
 	freeBitOf_put(objectPointer, 1);
 	toFreePointerListAdd(objectPointer);
 }
 
-
-// reverseHeapPointersAbove:
 void ObjectMemory::reverseHeapPointersAbove(int lowWaterMark) {
+	
+	// reverseHeapPointersAbove:
 	int size;
 	
 	/* "source"
@@ -468,12 +464,12 @@ void ObjectMemory::reverseHeapPointersAbove(int lowWaterMark) {
 	
 	/* pg. 673 G&R */
 	for (int objectPointer = 0; objectPointer <= ObjectTableSize - 2; objectPointer += 2) {
-		if(freeBitOf(objectPointer)==0)  // the Object Table entry is in use
+		if (freeBitOf(objectPointer) == 0)  // the Object Table entry is in use
 		{
 			// the object is in this segment
-			if(segmentBitsOf(objectPointer)==currentSegment) {
+			if (segmentBitsOf(objectPointer) == currentSegment) {
 				// the object will be swept
-				if(locationBitsOf(objectPointer) >= lowWaterMark) {
+				if (locationBitsOf(objectPointer) >= lowWaterMark) {
 					size = sizeBitsOf(objectPointer); // rescue the size
 					sizeBitsOf_put(objectPointer, objectPointer); // reverse pointer
 					locationBitsOf_put(objectPointer, size); // save the size
@@ -483,9 +479,9 @@ void ObjectMemory::reverseHeapPointersAbove(int lowWaterMark) {
 	}
 }
 
-
-// abandonFreeChunksInSegment:
 int ObjectMemory::abandonFreeChunksInSegment(int segment) {
+	// abandonFreeChunksInSegment:
+	
 	int lowWaterMark; // Location in the segment of the first free chunk
 	int objectPointer;
 	int nextPointer;
@@ -515,7 +511,7 @@ int ObjectMemory::abandonFreeChunksInSegment(int segment) {
 	lowWaterMark = HeapSpaceStop; // first assume that no chunk is free
 	for (int size = HeaderSize; size <= BigSize; size++) {
 		objectPointer = headOfFreeChunkList_inSegment(size, segment);
-		while (objectPointer!=NonPointer) {
+		while (objectPointer != NonPointer) {
 			lowWaterMark = std::min(lowWaterMark, locationBitsOf(objectPointer));
 			nextPointer = classBitsOf(objectPointer); // link to next free chunk
 			classBitsOf_put(objectPointer, NonPointer); // distinguish for sweep
@@ -526,7 +522,6 @@ int ObjectMemory::abandonFreeChunksInSegment(int segment) {
 	}
 	return lowWaterMark;
 }
-
 
 #ifdef GC_MARK_SWEEP
 
@@ -558,8 +553,8 @@ int ObjectMemory::markObjectsAccessibleFrom(int rootObjectPointer) {
 	return forAllObjectsAccessibleFrom_suchThat_do(
 		rootObjectPointer,
 		[this](int objectPointer) { // the predicate tests for an unmarked object and marks it
-			bool unmarked = countBitsOf(objectPointer)==0;
-			if(unmarked)
+			bool unmarked = countBitsOf(objectPointer) == 0;
+			if (unmarked)
 				countBitsOf_put(objectPointer, 1);
 			return unmarked;
 		},
@@ -568,8 +563,6 @@ int ObjectMemory::markObjectsAccessibleFrom(int rootObjectPointer) {
 		});
 }
 
-
-// markAccessibleObjects
 void ObjectMemory::markAccessibleObjects() {
 	/* "source"
 		"ERROR: rootObjectPointers not defined"
@@ -581,19 +574,17 @@ void ObjectMemory::markAccessibleObjects() {
 	for (int i = 0; i <= LastSpecialOop; i += 2)
 		addRoot(i);
 	
-	if(gcNotification)
+	if (gcNotification)
 		gcNotification->prepareForCollection();
 }
 
 #endif
-
 
 void ObjectMemory::outOfMemoryError() {
 	assert(0);
 	hal->error("Out of memory");
 }
 
-// allocateChunk:
 int ObjectMemory::allocateChunk(int size) {
 	int objectPointer;
 	
@@ -608,15 +599,15 @@ int ObjectMemory::allocateChunk(int size) {
 	*/
 	
 	objectPointer = attemptToAllocateChunk(size);
-	#ifdef GC_MARK_SWEEP
-	if(objectPointer==NilPointer) {
+#ifdef GC_MARK_SWEEP
+	if (objectPointer == NilPointer) {
 		reclaimInaccessibleObjects();
 		objectPointer = attemptToAllocateChunk(size);
 	}
-	#endif
+#endif
 	
-	if(objectPointer!=NilPointer) {
-		if(freeWords >= size)
+	if (objectPointer != NilPointer) {
+		if (freeWords >= size)
 			freeWords -= size;
 		return objectPointer;
 	}
@@ -626,7 +617,6 @@ int ObjectMemory::allocateChunk(int size) {
 
 #ifdef GC_MARK_SWEEP
 
-// rectifyCountsAndDeallocateGarbage
 void ObjectMemory::rectifyCountsAndDeallocateGarbage() {
 	int count;
 	
@@ -673,19 +663,19 @@ void ObjectMemory::rectifyCountsAndDeallocateGarbage() {
 	// rectify counts, and deallocate garbage
 	for (int objectPointer = 0; objectPointer <= ObjectTableSize - 2; objectPointer += 2) {
 		
-		if(freeBitOf(objectPointer)!=0) // if is free entry, continue
+		if (freeBitOf(objectPointer) != 0) // if is free entry, continue
 			continue;
 		
 		count = countBitsOf(objectPointer);
 		
-		if(count==0) {// unmarked, so deallocate it
+		if (count == 0) {// unmarked, so deallocate it
 			freeWords += spaceOccupiedBy(objectPointer); //dbanay
 			deallocate(objectPointer);
 		}
 		else {
 			// it is marked so rectify reference counts
 			
-			if(count < 128)    // subtract 1 to compensate for the mark
+			if (count < 128)    // subtract 1 to compensate for the mark
 				countBitsOf_put(objectPointer, count - 1);
 			
 			int limit = lastPointerOf(objectPointer) - 1;
@@ -700,12 +690,10 @@ void ObjectMemory::rectifyCountsAndDeallocateGarbage() {
 	countBitsOf_put(NilPointer, 128);
 	freeOops = auditFreeOops();
 	
-	if(gcNotification)
+	if (gcNotification)
 		gcNotification->collectionCompleted();
 }
 
-
-// zeroReferenceCounts
 void ObjectMemory::zeroReferenceCounts() {
 	/* "source"
 		0 to: ObjectTableSize-2 by: 2 do:
@@ -719,9 +707,8 @@ void ObjectMemory::zeroReferenceCounts() {
 
 #endif
 
-// lastPointerOf:
-// This returns the size of object up to the last pointer in it
 int ObjectMemory::lastPointerOf(int objectPointer) {
+	// This returns the size of object up to the last pointer in it
 	// MethodClass is the object table index of CompiledMethod.
 	static const int MethodClass = ClassCompiledMethod;
 	int methodHeader;
@@ -752,9 +739,9 @@ int ObjectMemory::lastPointerOf(int objectPointer) {
 
 	 */
 	
-	if(pointerBitOf(objectPointer)==0) { // Not pointer object
+	if (pointerBitOf(objectPointer) == 0) { // Not pointer object
 		// CompiledMethods are special in that they are marked as having no pointers but actually do
-		if(classBitsOf(objectPointer)==MethodClass) {
+		if (classBitsOf(objectPointer) == MethodClass) {
 			methodHeader = heapChunkOf_word(objectPointer, HeaderSize);
 			// Header Size + Method Header Size + Literal Count
 			return HeaderSize + 1 + ((methodHeader & 126) >> 1);
@@ -764,7 +751,6 @@ int ObjectMemory::lastPointerOf(int objectPointer) {
 	}
 	return sizeBitsOf(objectPointer);
 }
-
 
 int ObjectMemory::spaceOccupiedBy(int objectPointer) {
 	int size;
@@ -776,13 +762,11 @@ int ObjectMemory::spaceOccupiedBy(int objectPointer) {
 			ifFalse: [^size + 1]
 	*/
 	size = sizeBitsOf(objectPointer);
-	if(size < HugeSize || pointerBitOf(objectPointer)==0)
+	if (size < HugeSize || pointerBitOf(objectPointer) == 0)
 		return size;
 	return size + 1; // Account for extra word used for traversal algorithm (G&R pg. 679)
 }
 
-
-// allocate:odd:pointer:extra:class:
 int ObjectMemory::allocate_odd_pointer_extra_class(
 	int size,
 	int oddBit,
@@ -810,7 +794,7 @@ int ObjectMemory::allocate_odd_pointer_extra_class(
 	oddBitOf_put(objectPointer, oddBit);
 	pointerBitOf_put(objectPointer, pointerBit);
 	classBitsOf_put(objectPointer, classPointer);
-	defaultValue = (pointerBit==0) ? 0 : NilPointer;
+	defaultValue = (pointerBit == 0) ? 0 : NilPointer;
 	
 	for (int i = HeaderSize; i <= size - 1; i++)
 		heapChunkOf_word_put(objectPointer, i, defaultValue);
@@ -821,18 +805,14 @@ int ObjectMemory::allocate_odd_pointer_extra_class(
 }
 
 int ObjectMemory::headOfFreePointerList() {
-	/* "source"
-	 ^wordMemory segment: ObjectTableSegment
-	 word: FreePointerList
-	 */
-	
+	// ^wordMemory segment: ObjectTableSegment
+	// word: FreePointerList
 	return wordMemory.segment_word(ObjectTableSegment, FreePointerList);
 }
 
-// toFreeChunkList:add:
 void ObjectMemory::toFreeChunkList_add(int size, int objectPointer) {
+	// toFreeChunkList:add:
 	int segment;
-	
 	/* "source"
 		segment <- self segmentBitsOf: objectPointer.
 		self classBitsOf: objectPointer
@@ -847,14 +827,12 @@ void ObjectMemory::toFreeChunkList_add(int size, int objectPointer) {
 	headOfFreeChunkList_inSegment_put(size, segment, objectPointer);
 }
 
-
-// headOfFreeChunkList:inSegment:put:
 int ObjectMemory::headOfFreeChunkList_inSegment_put(int size, int segment, int objectPointer) {
-	/* "source"
-		^wordMemory segment: segment
-			word: FirstFreeChunkList + size
-			put: objectPointer
-	*/
+	// headOfFreeChunkList:inSegment:put:
+	
+	//	^wordMemory segment: segment
+	//		word: FirstFreeChunkList + size
+	//		put: objectPointer
 	
 	RUNTIME_CHECK(size >= HeaderSize && size <= BigSize);
 	return wordMemory.segment_word_put(
@@ -864,42 +842,36 @@ int ObjectMemory::headOfFreeChunkList_inSegment_put(int size, int segment, int o
 	);
 }
 
-
-// removeFromFreePointerList
 int ObjectMemory::removeFromFreePointerList() {
+	// removeFromFreePointerList
+	
 	int objectPointer;
 	
-	/* "source"
-		objectPointer <- self headOfFreePointerList.
-		objectPointer = NonPointer ifTrue: [^nil].
-		self headOfFreePointerListPut: (self locationBitsOf: objectPointer).
-		^objectPointer
-	*/
+	//	objectPointer <- self headOfFreePointerList.
+	//	objectPointer = NonPointer ifTrue: [^nil].
+	//	self headOfFreePointerListPut: (self locationBitsOf: objectPointer).
+	//	^objectPointer
 	
 	objectPointer = headOfFreePointerList();
-	
-	if(objectPointer==NonPointer)
+	if (objectPointer == NonPointer)
 		return NilPointer;
 	
 	headOfFreePointerListPut(locationBitsOf(objectPointer));
 	return objectPointer;
 }
 
-// toFreePointerListAdd:
 void ObjectMemory::toFreePointerListAdd(int objectPointer) {
-	/* "source"
-		self locationBitsOf: objectPointer
-			put: (self headOfFreePointerList).
-		self headOfFreePointerListPut: objectPointer
-	*/
+	// toFreePointerListAdd:
 	
+	//	self locationBitsOf: objectPointer
+	//		put: (self headOfFreePointerList).
+	//	self headOfFreePointerListPut: objectPointer
 	locationBitsOf_put(objectPointer, headOfFreePointerList());
 	headOfFreePointerListPut(objectPointer);
 }
 
-
-// removeFromFreeChunkList:
 int ObjectMemory::removeFromFreeChunkList(int size) {
+	// removeFromFreeChunkList:
 	int objectPointer;
 	int secondChunk;
 	
@@ -915,17 +887,14 @@ int ObjectMemory::removeFromFreeChunkList(int size) {
 	*/
 	
 	RUNTIME_CHECK(currentSegment >= FirstHeapSegment && currentSegment <= LastHeapSegment);
-	
 	objectPointer = headOfFreeChunkList_inSegment(size, currentSegment);
-	if(objectPointer==NonPointer)
+	if (objectPointer == NonPointer)
 		return NilPointer;
 	secondChunk = classBitsOf(objectPointer);
 	headOfFreeChunkList_inSegment_put(size, currentSegment, secondChunk);
 	return objectPointer;
 }
 
-
-// resetFreeChunkList:inSegment:
 void ObjectMemory::resetFreeChunkList_inSegment(int size, int segment) {
 	/* "source"
 		self headOfFreeChunkList: size
@@ -936,34 +905,23 @@ void ObjectMemory::resetFreeChunkList_inSegment(int size, int segment) {
 	headOfFreeChunkList_inSegment_put(size, segment, NonPointer);
 }
 
-
-// headOfFreeChunkList:inSegment:
 int ObjectMemory::headOfFreeChunkList_inSegment(int size, int segment) {
-	/* "source"
-		^wordMemory segment: segment
-			word: FirstFreeChunkList + size
-	*/
+	//	^wordMemory segment: segment word: FirstFreeChunkList + size
 	RUNTIME_CHECK(size >= 2 && size <= BigSize);
 	return wordMemory.segment_word(segment, FirstFreeChunkList + size);
 }
 
-
-// headOfFreePointerListPut:
 int ObjectMemory::headOfFreePointerListPut(int objectPointer) {
-	/* "source"
-	 ^wordMemory segment: ObjectTableSegment
-		 word: FreePointerList
-		 put: objectPointer
-	*/
-	return wordMemory.segment_word_put(
-		ObjectTableSegment,
-		FreePointerList,
-		objectPointer);
+	// headOfFreePointerListPut:
+	
+	// ^wordMemory segment: ObjectTableSegment
+	//	 word: FreePointerList
+	//	 put: objectPointer
+	return wordMemory.segment_word_put(ObjectTableSegment, FreePointerList, objectPointer);
 }
 
-
-// countDown:
 int ObjectMemory::countDown(int rootObjectPointer) {
+	// countDown:
 	
 	/* "source"
 		(self isIntegerObject: rootObjectPointer)
@@ -984,7 +942,7 @@ int ObjectMemory::countDown(int rootObjectPointer) {
 							self deallocate: objectPointer]]
 	*/
 	
-	if(isIntegerObject(rootObjectPointer))
+	if (isIntegerObject(rootObjectPointer))
 		return rootObjectPointer;
 	
 	RUNTIME_CHECK(countBitsOf(rootObjectPointer) > 0);
@@ -995,9 +953,9 @@ int ObjectMemory::countDown(int rootObjectPointer) {
 		[this](int objectPointer) { // predicate
 			int count = countBitsOf(objectPointer) - 1;
 			RUNTIME_CHECK(count >= 0);
-			if(count < 127)
+			if (count < 127)
 				countBitsOf_put(objectPointer, count);
-			return count==0;
+			return count == 0;
 		},
 		[this](int objectPointer) { // action
 			// std::cout << "reference count zero. freeing " << objectPointer << " (" << classNameOfObject(fetchClassOf(objectPointer)) << ") free oops = " << freeOops << "\n";
@@ -1009,8 +967,6 @@ int ObjectMemory::countDown(int rootObjectPointer) {
 	
 }
 
-
-// countUp:
 int ObjectMemory::countUp(int objectPointer) {
 	int count;
 	
@@ -1020,17 +976,15 @@ int ObjectMemory::countUp(int objectPointer) {
 				count < 129 ifTrue: [self countBitsOf: objectPointer put: count]].
 		^objectPointer
 	*/
-	if(!isIntegerObject(objectPointer)) {
+	if (!isIntegerObject(objectPointer)) {
 		count = countBitsOf(objectPointer) + 1;
-		if(count < 129) // Count sticks at 128
+		if (count < 129) // Count sticks at 128
 			countBitsOf_put(objectPointer, count);
 	}
 	
 	return objectPointer;
 }
 
-
-// deallocate:
 void ObjectMemory::deallocate(int objectPointer) {
 	int space;
 	
@@ -1090,7 +1044,6 @@ int ObjectMemory::forAllOtherObjectsAccessibleFrom_suchThat_do(
 }
 #else
 
-// forAllOtherObjectsAccessibleFrom:suchThat:do:
 int ObjectMemory::forAllOtherObjectsAccessibleFrom_suchThat_do(
 	int objectPointer,
 	const std::function<bool(int)> &predicate,
@@ -1150,15 +1103,15 @@ int ObjectMemory::forAllOtherObjectsAccessibleFrom_suchThat_do(
 	for (;;) {
 		// for all pointers in all objects traversed
 		offset--; // decrement the field index
-		if(offset > 0) // the class hasn't been passed yet
+		if (offset > 0) // the class hasn't been passed yet
 		{
 			next = heapChunkOf_word(current, offset); // one of the pointers
-			if(!isIntegerObject(next) && predicate(next)) {
+			if (!isIntegerObject(next) && predicate(next)) {
 				// it's a non-immediate object and it should be processed
 				// reverse pointer chain
 				heapChunkOf_word_put(current, offset, prior);
 				// save the offset either in the count field or in the extra word
-				if(size < HugeSize)
+				if (size < HugeSize)
 					countBitsOf_put(current, offset);
 				else
 					heapChunkOf_word_put(current, size, offset);
@@ -1172,14 +1125,14 @@ int ObjectMemory::forAllOtherObjectsAccessibleFrom_suchThat_do(
 			// all pointers have been followed; now perform the action
 			action(current);
 			// did we get here from another object?
-			if(prior==NonPointer) // this was the root object, so we are done
+			if (prior == NonPointer) // this was the root object, so we are done
 				return objectPointer;
 			// restore next, current and size to resume processing prior
 			next = current;
 			current = prior;
 			size = lastPointerOf(current);
 			// restore offset either from the count field or from the extra word
-			if(size < HugeSize)
+			if (size < HugeSize)
 				offset = countBitsOf(current);
 			else
 				offset = heapChunkOf_word(current, size);
@@ -1193,8 +1146,6 @@ int ObjectMemory::forAllOtherObjectsAccessibleFrom_suchThat_do(
 
 #endif
 
-
-// forAllObjectsAccessibleFrom:suchThat:do:
 int ObjectMemory::forAllObjectsAccessibleFrom_suchThat_do(
 	int objectPointer, const std::function<bool(int)> &predicate, const std::function<void(int)> &action) {
 	/* "source"
@@ -1204,7 +1155,7 @@ int ObjectMemory::forAllObjectsAccessibleFrom_suchThat_do(
 					do: action]
 	*/
 	
-	if(predicate(objectPointer)) {
+	if (predicate(objectPointer)) {
 		return forAllOtherObjectsAccessibleFrom_suchThat_do(
 			objectPointer, predicate, action);
 	}
@@ -1213,8 +1164,6 @@ int ObjectMemory::forAllObjectsAccessibleFrom_suchThat_do(
 	
 }
 
-
-// storePointer:ofObject:withValue:
 int ObjectMemory::storePointer_ofObject_withValue(int fieldIndex, int objectPointer, int valuePointer) {
 	int chunkIndex;
 	
@@ -1229,16 +1178,14 @@ int ObjectMemory::storePointer_ofObject_withValue(int fieldIndex, int objectPoin
 	RUNTIME_CHECK(valuePointer > 0);
 	
 	chunkIndex = HeaderSize + fieldIndex;
-	
-	#ifdef GC_REF_COUNT
+
+#ifdef GC_REF_COUNT
 	countUp(valuePointer);
 	countDown(heapChunkOf_word(objectPointer, chunkIndex));
-	#endif
+#endif
 	return heapChunkOf_word_put(objectPointer, chunkIndex, valuePointer);
 }
 
-
-// storeWord:ofObject:withValue:
 int ObjectMemory::storeWord_ofObject_withValue(int wordIndex, int objectPointer, int valueWord) {
 	/* "source"
 		^self heapChunkOf: objectPointer word: HeaderSize + wordIndex
@@ -1249,8 +1196,6 @@ int ObjectMemory::storeWord_ofObject_withValue(int wordIndex, int objectPointer,
 		objectPointer, HeaderSize + wordIndex, valueWord);
 }
 
-
-// initialInstanceOf:
 int ObjectMemory::initialInstanceOf(int classPointer) {
 	// Mario checks for the count bit not being zero. This is necessary
 	// because an OT entry with a clear free bit but a ZERO count marks
@@ -1267,16 +1212,14 @@ int ObjectMemory::initialInstanceOf(int classPointer) {
 	
 	for (int pointer = 0; pointer <= ObjectTableSize - 2; pointer += 2) {
 		// Only consider non-free entries that are not free chunks
-		if(freeBitOf(pointer)==0 && countBitsOf(pointer)!=0) {
-			if(fetchClassOf(pointer)==classPointer)
+		if (freeBitOf(pointer) == 0 && countBitsOf(pointer) != 0) {
+			if (fetchClassOf(pointer) == classPointer)
 				return pointer;
 		}
 	}
 	return NilPointer;
 }
 
-
-// swapPointersOf:and:
 void ObjectMemory::swapPointersOf_and(int firstPointer, int secondPointer) {
 	
 	int firstSegment;
@@ -1319,8 +1262,6 @@ void ObjectMemory::swapPointersOf_and(int firstPointer, int secondPointer) {
 	oddBitOf_put(secondPointer, firstOdd);
 }
 
-
-// instantiateClass:withWords:
 int ObjectMemory::instantiateClass_withWords(int classPointer, int length) {
 	int size;
 	
@@ -1332,8 +1273,6 @@ int ObjectMemory::instantiateClass_withWords(int classPointer, int length) {
 	return allocate_odd_pointer_extra_class(size, 0, 0, 0, classPointer);
 }
 
-
-// instantiateClass:withBytes:
 int ObjectMemory::instantiateClass_withBytes(int classPointer, int length) {
 	int size;
 	
@@ -1345,8 +1284,6 @@ int ObjectMemory::instantiateClass_withBytes(int classPointer, int length) {
 	return allocate_odd_pointer_extra_class(size, length % 2, 0, 0, classPointer);
 }
 
-
-// hasObject:
 bool ObjectMemory::hasObject(int objectPointer) {
 	/* "source"
 		"is objectPointer pointing to a valid object ?"
@@ -1355,21 +1292,19 @@ bool ObjectMemory::hasObject(int objectPointer) {
 			and: [(self countBitsOf: objectPointer) ~= 0]
 	*/
 	cantBeIntegerObject(objectPointer); // dbanay
-	return freeBitOf(objectPointer)==0 && countBitsOf(objectPointer)!=0;
+	return freeBitOf(objectPointer) == 0 && countBitsOf(objectPointer) != 0;
 }
 
 int ObjectMemory::auditFreeOops() {
 	int count = 0;
 	for (int objectPointer = 2; objectPointer < ObjectTableSize; objectPointer += 2) {
-		if(!hasObject(objectPointer))
+		if (!hasObject(objectPointer))
 			count++;
 	}
 	
 	return count;
 }
 
-
-// instantiateClass:withPointers:
 int ObjectMemory::instantiateClass_withPointers(int classPointer, int length) {
 	int size;
 	int extra;
@@ -1385,8 +1320,6 @@ int ObjectMemory::instantiateClass_withPointers(int classPointer, int length) {
 	return allocate_odd_pointer_extra_class(size, 0, 1, extra, classPointer);
 }
 
-
-// instanceAfter:
 int ObjectMemory::instanceAfter(int objectPointer) {
 	int classPointer;
 	
@@ -1407,8 +1340,8 @@ int ObjectMemory::instanceAfter(int objectPointer) {
 	classPointer = fetchClassOf(objectPointer);
 	
 	for (int pointer = objectPointer + 2; pointer <= ObjectTableSize - 2; pointer += 2) {
-		if(hasObject(pointer)) {
-			if(fetchClassOf(pointer)==classPointer)
+		if (hasObject(pointer)) {
+			if (fetchClassOf(pointer) == classPointer)
 				return pointer;
 		}
 	}
@@ -1416,8 +1349,6 @@ int ObjectMemory::instanceAfter(int objectPointer) {
 	
 }
 
-
-// cantBeIntegerObject:
 void ObjectMemory::cantBeIntegerObject(int objectPointer) {
 	/* "source"
 		(self isIntegerObject: objectPointer)
@@ -1426,12 +1357,10 @@ void ObjectMemory::cantBeIntegerObject(int objectPointer) {
 	*/
 	
 	assert(!isIntegerObject(objectPointer));
-	if(isIntegerObject(objectPointer))
+	if (isIntegerObject(objectPointer))
 		hal->error("A small integer has no object table entry");
 }
 
-
-// obtainPointer:location:
 int ObjectMemory::obtainPointer_location(int size, int location) {
 	int objectPointer;
 	
@@ -1446,7 +1375,7 @@ int ObjectMemory::obtainPointer_location(int size, int location) {
 	*/
 	RUNTIME_CHECK(currentSegment >= FirstHeapSegment && currentSegment <= LastHeapSegment);
 	objectPointer = removeFromFreePointerList();
-	if(objectPointer==NilPointer)
+	if (objectPointer == NilPointer)
 		return NilPointer;
 	ot_put(objectPointer, 0);
 	segmentBitsOf_put(objectPointer, currentSegment);
@@ -1455,8 +1384,6 @@ int ObjectMemory::obtainPointer_location(int size, int location) {
 	return objectPointer;
 }
 
-
-// attemptToAllocateChunk:
 int ObjectMemory::attemptToAllocateChunk(int size) {
 	int objectPointer;
 	
@@ -1477,23 +1404,21 @@ int ObjectMemory::attemptToAllocateChunk(int size) {
 	
 	RUNTIME_CHECK(currentSegment >= FirstHeapSegment && currentSegment <= LastHeapSegment);
 	objectPointer = attemptToAllocateChunkInCurrentSegment(size);
-	if(objectPointer!=NilPointer)
+	if (objectPointer != NilPointer)
 		return objectPointer;
 	for (int i = 1; i <= HeapSegmentCount; i++) {
 		currentSegment++;
-		if(currentSegment > LastHeapSegment)
+		if (currentSegment > LastHeapSegment)
 			currentSegment = FirstHeapSegment;
 		compactCurrentSegment();
 		objectPointer = attemptToAllocateChunkInCurrentSegment(size);
-		if(objectPointer!=NilPointer)
+		if (objectPointer != NilPointer)
 			return objectPointer;
 		
 	}
 	return NilPointer;
 }
 
-
-// attemptToAllocateChunkInCurrentSegment:
 int ObjectMemory::attemptToAllocateChunkInCurrentSegment(int size) {
 	int objectPointer = NilPointer;
 	int predecessor;
@@ -1546,22 +1471,22 @@ int ObjectMemory::attemptToAllocateChunkInCurrentSegment(int size) {
 		^nil "the end of the linked list was reached and no fit was found"
 	*/
 	RUNTIME_CHECK(currentSegment >= FirstHeapSegment && currentSegment <= LastHeapSegment);
-	if(size < BigSize)
+	if (size < BigSize)
 		objectPointer = removeFromFreeChunkList(size);
 	
-	if(objectPointer!=NilPointer) {
+	if (objectPointer != NilPointer) {
 		return objectPointer; // small chunk of exact size handy so use it
 	}
 	predecessor = NonPointer; // remember predecessor of chunk under consideration
 	objectPointer = headOfFreeChunkList_inSegment(BigSize, currentSegment);
 	
 	// the search loop stops when the end of the linked list is encountered
-	while (objectPointer!=NonPointer) {
+	while (objectPointer != NonPointer) {
 		availableSize = sizeBitsOf(objectPointer);
-		if(availableSize==size) {
+		if (availableSize == size) {
 			// exact fit - remove from free chunk list and return
 			next = classBitsOf(objectPointer);  // the link to the next chunk
-			if(predecessor==NonPointer) {
+			if (predecessor == NonPointer) {
 				// it was the head of the list; make the next item the head
 				headOfFreeChunkList_inSegment_put(BigSize, currentSegment, next);
 			}
@@ -1574,11 +1499,11 @@ int ObjectMemory::attemptToAllocateChunkInCurrentSegment(int size) {
 		
 		// this chunk was either too big or too small; inspect the amount of variance
 		excessSize = availableSize - size;
-		if(excessSize >= HeaderSize) {
+		if (excessSize >= HeaderSize) {
 			// can be broken into two usable parts: return the second part
 			// obtain an object table entry for the second part
 			newPointer = obtainPointer_location(size, locationBitsOf(objectPointer) + excessSize);
-			if(newPointer==NilPointer)
+			if (newPointer == NilPointer)
 				return NilPointer;
 			// correct the size of the first part (which remains on the free list)
 			sizeBitsOf_put(objectPointer, excessSize);

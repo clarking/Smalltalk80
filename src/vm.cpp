@@ -7,44 +7,46 @@ void VirtualMachine::set_input_semaphore(int semaphore) {
 	input_semaphore = semaphore;
 }
 
-// the number of seconds since 00:00 in the morning of January 1, 1901
 std::uint32_t VirtualMachine::get_smalltalk_epoch_time() {
+	// the number of seconds since 00:00 in the morning of January 1, 1901
+	
 	// Seconds between 1/1/1901 00:00 and 1/1/1970 00:00
 	const std::uint32_t TIME_OFFSET = 2177452800;
 	time_t unix_epoch_time = time(0);
 	return (std::uint32_t) unix_epoch_time + TIME_OFFSET;
 }
 
-// the number of milliseconds since the millisecond clock was
-// last reset or rolled over (a 32-bit unsigned number)
 std::uint32_t VirtualMachine::get_msclock() {
+	// the number of milliseconds since the millisecond clock was
+	// last reset or rolled over (a 32-bit unsigned number)
 	return SDL_GetTicks();
 }
 
 void VirtualMachine::check_scheduled_semaphore() {
-	if(scheduled_semaphore && SDL_TICKS_PASSED(SDL_GetTicks(), scheduled_time)) {
+	if (scheduled_semaphore && SDL_TICKS_PASSED(SDL_GetTicks(), scheduled_time)) {
 		interpreter.asynchronousSignal(scheduled_semaphore);
 		scheduled_semaphore = 0;
 	}
 }
 
-// Schedule a semaphore to be signaled at a time. Only one outstanding
-// request may be scheduled at anytime. When called any outstanding
-// request will be replaced (or canceled if semaphore is 0).
-// Will signal immediate if scheduled time has passed.
 void VirtualMachine::signal_at(int semaphore, std::uint32_t msClockTime) {
+	
+	// Schedule a semaphore to be signaled at a time. Only one outstanding
+	// request may be scheduled at anytime. When called any outstanding
+	// request will be replaced (or canceled if semaphore is 0).
+	// Will signal immediate if scheduled time has passed.
+	
 	scheduled_semaphore = semaphore;
 	scheduled_time = msClockTime;
-	
-	if(semaphore)
-		// Just in case the time passed
-		check_scheduled_semaphore();
-	
+	if (semaphore)
+		check_scheduled_semaphore();        // Just in case the time passed
 }
 
 SDL_Cursor *VirtualMachine::create_cursor(const Uint8 *cursor_bits) {
+	
 	// Maps a nibble to a byte where each bit is repeated
 	// e.g. 1010 -> 11001100
+	
 	static int expandedNibbleToByte[] = {
 		0b00000000,  // 0000
 		0b00000011,  // 0001
@@ -67,7 +69,7 @@ SDL_Cursor *VirtualMachine::create_cursor(const Uint8 *cursor_bits) {
 	
 	SDL_Cursor *new_cursor = 0;
 	
-	if(vm_options.display_scale==1)
+	if (vm_options.display_scale == 1)
 		new_cursor = SDL_CreateCursor(
 			cursor_bits,
 			cursor_bits,
@@ -76,7 +78,7 @@ SDL_Cursor *VirtualMachine::create_cursor(const Uint8 *cursor_bits) {
 			0,
 			0);
 	
-	else if(vm_options.display_scale==2) {
+	else if (vm_options.display_scale == 2) {
 		std::uint8_t image[128];
 		std::uint8_t *src = (std::uint8_t *) cursor_bits;
 		int dest = 0;
@@ -105,8 +107,9 @@ SDL_Cursor *VirtualMachine::create_cursor(const Uint8 *cursor_bits) {
 			0);
 	}
 	
-	if(!new_cursor)
-		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Create Cursor failed: %s", SDL_GetError());
+	if (!new_cursor)
+		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+		             "Create Cursor failed: %s", SDL_GetError());
 	
 	return new_cursor;
 }
@@ -143,16 +146,16 @@ void VirtualMachine::update_mouse_cursor(const std::uint16_t* cursor_bits)
 	}
 #endif
 
-// Set the cursor image  (a 16 word form)
 void VirtualMachine::set_cursor_image(std::uint16_t *image) {
-	#ifdef SOFTWARE_MOUSE_CURSOR
+// Set the cursor image  (a 16 word form)
+#ifdef SOFTWARE_MOUSE_CURSOR
 	if (!mouse_texture)
 		{
 			mouse_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA5551, SDL_TEXTUREACCESS_STREAMING, 16, 16);
 			SDL_SetTextureBlendMode(mouse_texture, SDL_BLENDMODE_BLEND);
 		}
 		update_mouse_cursor(image);
-	#else
+#else
 	
 	std::uint16_t cursor_bits[16];
 	
@@ -164,14 +167,14 @@ void VirtualMachine::set_cursor_image(std::uint16_t *image) {
 	cursor = create_cursor((const Uint8 *) cursor_bits);
 	SDL_SetCursor(cursor);
 	
-	if(old_cursor)
+	if (old_cursor)
 		SDL_FreeCursor(old_cursor);
-	
-	#endif
+
+#endif
 }
 
-// Set the mouse cursor location
 void VirtualMachine::set_cursor_location(int x, int y) {
+	// Set the mouse cursor location
 	SDL_WarpMouseInWindow(window, x * vm_options.display_scale, y * vm_options.display_scale);
 }
 
@@ -189,7 +192,7 @@ void VirtualMachine::initialize_texture() {
 	int dest_pitch;
 	
 	int code = SDL_LockTexture(texture, 0, (void **) &dest_row, &dest_pitch);
-	if(code < 0) {
+	if (code < 0) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't LOCK SDL: %s", SDL_GetError());
 		return;
 	}
@@ -208,7 +211,7 @@ void VirtualMachine::initialize_texture() {
 
 bool VirtualMachine::set_display_size(int width, int height) {
 	
-	if(display_width==width || display_height==height)
+	if (display_width == width || display_height == height)
 		return false;
 	
 	display_width = width;
@@ -218,7 +221,7 @@ bool VirtualMachine::set_display_size(int width, int height) {
 	dirty_rect.w = width;
 	dirty_rect.h = height;
 	
-	if(window) {
+	if (window) {
 		SDL_SetWindowSize(
 			window,
 			vm_options.display_scale * display_width,
@@ -228,7 +231,6 @@ bool VirtualMachine::set_display_size(int width, int height) {
 		SDL_DestroyTexture(texture);
 	}
 	else {
-		
 		window = SDL_CreateWindow(
 			"Smalltalk-80",
 			SDL_WINDOWPOS_UNDEFINED,
@@ -239,7 +241,7 @@ bool VirtualMachine::set_display_size(int width, int height) {
 		);
 		
 		Uint32 flags = SDL_RENDERER_ACCELERATED;
-		if(vm_options.vsync)
+		if (vm_options.vsync)
 			flags = flags | SDL_RENDERER_PRESENTVSYNC;
 		
 		renderer = SDL_CreateRenderer(window, -1, flags);
@@ -266,8 +268,9 @@ void VirtualMachine::update_texture() {
 	int update_word_width = word_right - word_left + 1;
 	
 	// We transfer pixels in groups of WORDS from the display form,
-	// so we need to set texture update rectangle so the left and right edges are on
-	// a word boundary
+	// so we need to set texture update rectangle so
+	// the left and right edges are on a word boundary
+	
 	SDL_Rect update_rect;
 	update_rect.x = word_left * 16;
 	update_rect.y = dirty_rect.y;
@@ -275,13 +278,13 @@ void VirtualMachine::update_texture() {
 	update_rect.h = dirty_rect.h;
 	
 	int bitmap = interpreter.getDisplayBits(display_width, display_height);
-	if(bitmap==0)
+	if (bitmap == 0)
 		return; // bail
 	
 	std::uint8_t *pixels;
 	int dest_pitch;
 	int code = SDL_LockTexture(texture, &update_rect, (void **) &pixels, &dest_pitch);
-	if(code < 0) {
+	if (code < 0) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't LOCK SDL: %s", SDL_GetError());
 		return;
 	}
@@ -320,15 +323,15 @@ void VirtualMachine::update_texture() {
 
 void VirtualMachine::display_changed(int x, int y, int width, int height) {
 	texture_needs_update = true;
-	
-	#ifdef DEBUG
+
+#ifdef DEBUG
 	assert(x >= 0 && x < display_width);
 		assert(y >= 0 && y < display_height);
 		assert(x + width <= display_width);
 		assert(y + height <= display_height);
-	#endif
+#endif
 	
-	if(SDL_RectEmpty(&dirty_rect)) {
+	if (SDL_RectEmpty(&dirty_rect)) {
 		dirty_rect.x = x;
 		dirty_rect.y = y;
 		dirty_rect.w = width;
@@ -345,19 +348,18 @@ void VirtualMachine::error(const char *message) {
 	abort();
 }
 
-//Input queue
 bool VirtualMachine::next_input_word(std::uint16_t *word) {
-	if(input_queue.size()==0)
+	//Input queue
+	if (input_queue.size() == 0)
 		return false;
 	
 	*word = input_queue.front();
 	input_queue.pop();
-	
 	return true;
 }
 
-// lifetime
 void VirtualMachine::signal_quit() {
+	// lifetime
 	quit_signalled = true;
 }
 
@@ -374,14 +376,14 @@ void VirtualMachine::exit_to_debugger() {
 }
 
 bool VirtualMachine::init() {
-	if(SDL_Init(SDL_INIT_VIDEO) < 0) {
+	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
 		SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't initialize SDL: %s", SDL_GetError());
 		return false;
 	}
-	
-	#ifdef SOFTWARE_MOUSE_CURSOR
+
+#ifdef SOFTWARE_MOUSE_CURSOR
 	SDL_ShowCursor(0); // We show our own...
-	#endif
+#endif
 	
 	texture_needs_update = false;
 	quit_signalled = false;
@@ -402,12 +404,12 @@ void VirtualMachine::queue_input_time_words() {
 	std::uint32_t delta_time;
 	std::uint32_t now = get_msclock();
 	
-	if(event_count++==0)
+	if (event_count++ == 0)
 		delta_time = 0;
 	else
 		delta_time = now - last_event_time;
 	
-	if(delta_time <= 4095) // can fit in 12 bits
+	if (delta_time <= 4095) // can fit in 12 bits
 		queue_input_word(0, delta_time);
 	else {
 		std::uint32_t abs_time = get_smalltalk_epoch_time();
@@ -421,11 +423,11 @@ void VirtualMachine::queue_input_time_words() {
 }
 
 void VirtualMachine::paste_clipboard() {
-	if(SDL_HasClipboardText()) {
+	if (SDL_HasClipboardText()) {
 		queue_input_time_words();
 		for (const char *text = SDL_GetClipboardText(); *text; text++) {
 			int ch = *text;
-			if(ch=='\n')
+			if (ch == '\n')
 				ch = '\r';
 			queue_input_word(3, ch);
 			queue_input_word(4, ch);
@@ -433,23 +435,23 @@ void VirtualMachine::paste_clipboard() {
 	}
 }
 
-/*
- decoded keyboard:
- 
- A decoded keyboard consists of some independent keys and some “meta" keys (shift and escape)
- that cannot be detected on their own, but that change the value of the other keys. The keys
- on a decoded keyboard only indicate their down transition, not their up transition.
- For a decoded keyboard, the full shifted and “controlled" ASCII should be used as a parameter
- and successive type 3 and 4 words should be produced for each keystroke.
- 
- undecoded keyboard:
- 
- (independent keys with up/down detection)
- On an undecoded keyboard, the standard keys produce parameters that are the ASCII code
- of the character on the keytop without shift or control information (i.e., the key with “A”
- on it produces the ASCII for  “a” and the key with “2” and “@“ on it produces the ASCII for “2”).
- */
 void VirtualMachine::handle_keyboard_event(const SDL_KeyboardEvent &key) {
+	/*
+	 decoded keyboard:
+	 
+	 A decoded keyboard consists of some independent keys and some “meta" keys (shift and escape)
+	 that cannot be detected on their own, but that change the value of the other keys. The keys
+	 on a decoded keyboard only indicate their down transition, not their up transition.
+	 For a decoded keyboard, the full shifted and “controlled" ASCII should be used as a parameter
+	 and successive type 3 and 4 words should be produced for each keystroke.
+	 
+	 undecoded keyboard:
+	 
+	 (independent keys with up/down detection)
+	 On an undecoded keyboard, the standard keys produce parameters that are the ASCII code
+	 of the character on the keytop without shift or control information (i.e., the key with “A”
+	 on it produces the ASCII for  “a” and the key with “2” and “@“ on it produces the ASCII for “2”).
+	 */
 	
 	// Map between a key scan code and it's shifted key value (if any)
 	static char shift_map[128] = {
@@ -468,16 +470,14 @@ void VirtualMachine::handle_keyboard_event(const SDL_KeyboardEvent &key) {
 		'Y', 'Z', '{', '|', '}', '~', 127
 	};
 	
-	std::uint16_t type = key.type==SDL_KEYDOWN ? 3 : 4;
+	std::uint16_t type = key.type == SDL_KEYDOWN ? 3 : 4;
 	std::uint16_t param = 0;
-	/*
-	 left shift 136 right shift 137 control 138 alpha-lock 139
-	 backspace 8 tab 9 line feed 10 return 13 escape 27 space 32 delete 127
-
-	 */
 	
-	if(key.keysym.scancode==SDL_SCANCODE_V && key.keysym.mod==KMOD_LGUI) {
-		if(type==3)
+	// left shift 136 right shift 137 control 138 alpha-lock 139
+	// backspace 8 tab 9 line feed 10 return 13 escape 27 space 32 delete 127
+	
+	if (key.keysym.scancode == SDL_SCANCODE_V && key.keysym.mod == KMOD_LGUI) {
+		if (type == 3)
 			paste_clipboard();
 		return;
 	}
@@ -499,24 +499,23 @@ void VirtualMachine::handle_keyboard_event(const SDL_KeyboardEvent &key) {
 			param = 127;
 			break;
 		default:
-			if(key.keysym.sym > 127)
+			if (key.keysym.sym > 127)
 				return;  // Must be ascii
 			param = key.keysym.sym & 0x7f;
 			break;
 	}
 	
-	if(param < 128) {
-		if(type==3) {
-			if(key.keysym.mod & (KMOD_LGUI | KMOD_RGUI))
+	if (param < 128) {
+		if (type == 3) {
+			if (key.keysym.mod & (KMOD_LGUI | KMOD_RGUI))
 				return; // Ignore
 			
-			if(key.keysym.mod & (KMOD_LSHIFT | KMOD_RSHIFT))
+			if (key.keysym.mod & (KMOD_LSHIFT | KMOD_RSHIFT))
 				param = shift_map[param];
 			
-			/*
-			 For a decoded keyboard, the full shifted and “controlled" ASCII should be
-			 used as a parameter and successive type 3 and 4 words should be produced for each keystroke.
-			 */
+			// For a decoded keyboard, the full shifted and “controlled" ASCII should be
+			// used as a parameter and successive type 3 and 4 words should be produced for each keystroke.
+			
 			queue_input_time_words();
 			queue_input_word(3, param);
 			queue_input_word(4, param);
@@ -530,10 +529,11 @@ void VirtualMachine::handle_keyboard_event(const SDL_KeyboardEvent &key) {
 }
 
 void VirtualMachine::handle_mouse_button_event(const SDL_MouseButtonEvent &mouse) {
+	
 	// The bluebook got these wrong!
-	const int RedButton = 130;  // select
-	const int YellowButton = 129;  // doit etc.
-	const int BlueButton = 128;  // frame, close
+	const int RedButton = 130;      // select
+	const int YellowButton = 129;   // doit etc.
+	const int BlueButton = 128;     // frame, close
 	
 	unsigned mods;
 	int smalltalk_button = 0;
@@ -558,7 +558,7 @@ void VirtualMachine::handle_mouse_button_event(const SDL_MouseButtonEvent &mouse
 			return;
 	}
 	
-	if(mouse.type==SDL_MOUSEBUTTONDOWN) {
+	if (mouse.type == SDL_MOUSEBUTTONDOWN) {
 		// Save mod state when the button went down
 		// when the button is released we will use these rather than active one
 		mods = SDL_GetModState();
@@ -567,8 +567,7 @@ void VirtualMachine::handle_mouse_button_event(const SDL_MouseButtonEvent &mouse
 	else
 		mods = button_down_mods[button_index];
 	
-	
-	if(vm_options.three_buttons) {
+	if (vm_options.three_buttons) {
 		// Real 3 button mouse
 		switch (mouse.button) {
 			case SDL_BUTTON_LEFT:
@@ -584,25 +583,24 @@ void VirtualMachine::handle_mouse_button_event(const SDL_MouseButtonEvent &mouse
 				return;
 		}
 	}
+	
 	else {
-		#ifdef __APPLE__
+#ifdef __APPLE__
 		const Uint32 BlueFlags = KMOD_RGUI|KMOD_LGUI;
-		#else
+#else
 		const Uint32 BlueFlags = KMOD_RALT | KMOD_LALT;
-		#endif
+#endif
 		
-		/*
-		 Left                   = Red
-		 Right/Ctrl+Left        = Yellow
-		 Alt+Left (win+linux)   = Blue
-		 Command+Left(mac)      = Blue
-		 */
+		// Left                   = Red
+		// Right/Ctrl+Left        = Yellow
+		// Alt+Left (win+linux)   = Blue
+		// Command+Left(mac)      = Blue
 		
 		switch (mouse.button) {
 			case SDL_BUTTON_LEFT:
-				if(mods & BlueFlags)
+				if (mods & BlueFlags)
 					smalltalk_button = BlueButton;
-				else if(mods & (KMOD_RCTRL | KMOD_LCTRL))
+				else if (mods & (KMOD_RCTRL | KMOD_LCTRL))
 					smalltalk_button = YellowButton;
 				else
 					smalltalk_button = RedButton;
@@ -615,11 +613,11 @@ void VirtualMachine::handle_mouse_button_event(const SDL_MouseButtonEvent &mouse
 		}
 	}
 	
-	if(mouse.type==SDL_MOUSEBUTTONDOWN) {
+	if (mouse.type == SDL_MOUSEBUTTONDOWN) {
 		queue_input_time_words();
 		queue_input_word(3, smalltalk_button);
 	}
-	else if(mouse.type==SDL_MOUSEBUTTONUP) {
+	else if (mouse.type == SDL_MOUSEBUTTONUP) {
 		button_down_mods[button_index] = 0;
 		queue_input_time_words();
 		queue_input_word(4, smalltalk_button);
@@ -634,16 +632,17 @@ void VirtualMachine::handle_mouse_movement_event(const SDL_MouseMotionEvent &mot
 }
 
 void VirtualMachine::render() {
-	if(renderer) {
-		if(texture_needs_update) {
+	
+	if (renderer) {
+		if (texture_needs_update) {
 			update_texture();
 			texture_needs_update = false;
 		}
 		
-		if(texture)
+		if (texture)
 			SDL_RenderCopy(renderer, texture, NULL, NULL);
-		
-		#ifdef SOFTWARE_MOUSE_CURSOR
+
+#ifdef SOFTWARE_MOUSE_CURSOR
 		if (mouse_texture)
 			{
 				static SDL_Rect mouse_src_rect{0,0,16,16};
@@ -653,7 +652,7 @@ void VirtualMachine::render() {
 				SDL_Rect dst = {mouseX, mouseY, 16*vm_options.display_scale, 16*vm_options.display_scale};
 				SDL_RenderCopy(renderer, mouse_texture, &mouse_src_rect, &dst);
 			}
-		#endif
+#endif
 		
 		SDL_RenderPresent(renderer);
 		dirty_rect.x = 0;
@@ -667,16 +666,16 @@ void VirtualMachine::process_events() {
 	SDL_Event event;
 	
 	while (SDL_PollEvent(&event)) {
-		if(event.type==SDL_QUIT) {
+		if (event.type == SDL_QUIT) {
 			quit_signalled = true;
 			break;
 		}
-		if(input_semaphore) {
-			if(event.type==SDL_KEYUP || event.type==SDL_KEYDOWN)
+		if (input_semaphore) {
+			if (event.type == SDL_KEYUP || event.type == SDL_KEYDOWN)
 				handle_keyboard_event(event.key);
-			else if(event.type==SDL_MOUSEBUTTONUP || event.type==SDL_MOUSEBUTTONDOWN)
+			else if (event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEBUTTONDOWN)
 				handle_mouse_button_event(event.button);
-			else if(event.type==SDL_MOUSEMOTION)
+			else if (event.type == SDL_MOUSEMOTION)
 				handle_mouse_movement_event(event.motion);
 		}
 	}
@@ -687,7 +686,6 @@ void VirtualMachine::run() {
 	while (!quit_signalled) {
 		
 		process_events();
-		
 		check_scheduled_semaphore();
 		interpreter.checkLowMemoryConditions();
 		
@@ -696,7 +694,7 @@ void VirtualMachine::run() {
 		
 		render();
 		
-		if(!vm_options.vsync && vm_options.novsync_delay > 0)
+		if (!vm_options.vsync && vm_options.novsync_delay > 0)
 			SDL_Delay(vm_options.novsync_delay); // Don't kill CPU
 	}
 }

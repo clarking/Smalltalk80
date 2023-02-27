@@ -2,9 +2,7 @@
 
 #pragma once
 
-#ifdef _WIN32
-	#define SOFTWARE_MOUSE_CURSOR
-#endif
+#include "conf.h"
 
 #include <iostream>
 #include <fstream>
@@ -14,10 +12,12 @@
 #include <time.h>
 
 #ifdef _WIN32
-	#define SDL_MAIN_HANDLED
-	#include "SDL.h"
+#define SDL_MAIN_HANDLED
+#include "SDL.h"
 #else
-	#include "SDL2/SDL.h"
+
+#include "SDL2/SDL.h"
+
 #endif
 
 #include "interpreter.h"
@@ -30,7 +30,7 @@ typedef std::uint16_t Pixel;
 static const SDL_PixelFormatEnum TextureFormat = SDL_PIXELFORMAT_RGB565;
 
 static inline void expand_pixel(Pixel *destPixel, std::uint16_t srcWord, int srcBit) {
-	*destPixel = -((srcWord & (1 << srcBit))==0);
+	*destPixel = -((srcWord & (1 << srcBit)) == 0);
 }
 
 struct options {
@@ -50,33 +50,39 @@ public:
 		vm_options(vm_options),
 		fileSystem(vm_options.root_directory),
 		interpreter(this, &fileSystem),
-		window(0), renderer(0), texture(0),
-		#ifdef SOFTWARE_MOUSE_CURSOR
+		window(0),
+		renderer(0),
+		texture(0),
+#ifdef SOFTWARE_MOUSE_CURSOR
 		mouse_texture(0),
-		#else
+#else
 		cursor(0),
-		#endif
-		display_width(0), display_height(0),
-		scheduled_semaphore(0), input_semaphore(0), scheduled_time(0),
+#endif
+		display_width(0),
+		display_height(0),
+		scheduled_semaphore(0),
+		input_semaphore(0),
+		scheduled_time(0),
 		event_count(0), last_event_time(0),
-		quit_signalled(false), texture_needs_update(false),
+		quit_signalled(false),
+		texture_needs_update(false),
 		image_name(vm_options.snapshot_name) {
 	}
 	
 	~VirtualMachine() {
-		#ifdef SOFTWARE_MOUSE_CURSOR
+#ifdef SOFTWARE_MOUSE_CURSOR
 		if (mouse_texture)
 			SDL_DestroyTexture(mouse_texture);
-		#else
-		if(cursor)
+#else
+		if (cursor)
 			SDL_FreeCursor(cursor);
-		
-		#endif
-		if(texture)
+
+#endif
+		if (texture)
 			SDL_DestroyTexture(texture);
-		if(renderer)
+		if (renderer)
 			SDL_DestroyRenderer(renderer);
-		if(window)
+		if (window)
 			SDL_DestroyWindow(window);
 	}
 	
@@ -163,10 +169,10 @@ public:
 	void handle_mouse_button_event(const SDL_MouseButtonEvent &mouse);
 	
 	void handle_mouse_movement_event(const SDL_MouseMotionEvent &motion);
-	
-	#ifdef SOFTWARE_MOUSE_CURSOR
+
+#ifdef SOFTWARE_MOUSE_CURSOR
 	void update_mouse_cursor(const std::uint16_t* cursor_bits);
-	#endif
+#endif
 	
 	void render();
 	
@@ -181,12 +187,12 @@ public:
 	SDL_Window *window;
 	SDL_Renderer *renderer;
 	SDL_Texture *texture;
-	
-	#ifdef SOFTWARE_MOUSE_CURSOR
+
+#ifdef SOFTWARE_MOUSE_CURSOR
 	SDL_Texture *mouse_texture;
-	#else
+#else
 	SDL_Cursor *cursor;
-	#endif
+#endif
 	
 	Interpreter interpreter;
 	std::queue<std::uint16_t> input_queue;

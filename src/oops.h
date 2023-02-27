@@ -59,7 +59,7 @@ static const int ClassFloatPointer = 20;
 
 static const int ClassSemaphorePointer = 38;
 static const int ClassDisplayScreenPointer = 834;
-static const int ClassUndefinedObject = 25728; 
+static const int ClassUndefinedObject = 25728;
 
 // Selectors
 static const int DoesNotUnderstandSelector = 42;

@@ -26,9 +26,7 @@
 //
 
 
-#include <cstdint>
 #include <cassert>
-#include <cstdlib>
 #include <cmath>
 #include <limits>
 #include "oops.h"
@@ -42,8 +40,8 @@ inline bool between_and(int value, int min, int max) {
 
 Interpreter::Interpreter(IHardwareAbstractionLayer *halInterface, IFileSystem *fileSystemInterface)
 	: hal(halInterface), fileSystem(fileSystemInterface),
-	#ifdef GC_MARK_SWEEP
-	  memory(halInterface, this)
+#ifdef GC_MARK_SWEEP
+      memory(halInterface, this)
 #else
 memory(halInterface)
 #endif
@@ -53,12 +51,11 @@ memory(halInterface)
 bool Interpreter::init() {
 	initializeMethodCache();
 	semaphoreIndex = -1;
-	if(!memory.loadSnapshot(fileSystem, hal->get_image_name()))
+	if (!memory.loadSnapshot(fileSystem, hal->get_image_name()))
 		return false;
-	/*
-     When Smalltalk is started up, the initial active context is found
-     through the scheduler's active Process.  (G&R pg. 644)
-     */
+	
+	// When Smalltalk is started up, the initial active context is found
+	// through the scheduler's active Process.  (G&R pg. 644)
 	
 	activeContext = firstContext();
 	memory.increaseReferencesTo(activeContext);
@@ -79,32 +76,30 @@ void Interpreter::error(const char *message) {
 	hal->error(message);
 }
 
-
 #ifdef GC_MARK_SWEEP
 
 void Interpreter::prepareForCollection() {
 	storeContextRegisters();
 	memory.addRoot(SmalltalkPointer);
 	memory.addRoot(activeContext);
-	if(newProcess!=NilPointer)
+	if (newProcess != NilPointer)
 		memory.addRoot(newProcess);
 }
 
 void Interpreter::collectionCompleted() {
 	memory.increaseReferencesTo(activeContext);
 	fetchContextRegisters();
-	if(newProcessWaiting)
+	if (newProcessWaiting)
 		memory.increaseReferencesTo(newProcess);
 }
 
 #endif
 
-// primitiveAtEnd
 void Interpreter::primitiveAtEnd() {
-		
-		#ifndef IMPLEMENT_PRIMITIVE_AT_END
+
+#ifndef IMPLEMENT_PRIMITIVE_AT_END
 	primitiveFail();
-		#else
+#else
 	
 	int stream;
 	int array;
@@ -137,21 +132,19 @@ void Interpreter::primitiveAtEnd() {
 	length = lengthOf(array);
 	index = fetchInteger_ofObject(StreamIndexIndex, stream);
 	limit = fetchInteger_ofObject(StreamReadLimitIndex, stream);
-	success(arrayClass==ClassArrayPointer || arrayClass==ClassStringPointer);
-	if(success()) {
-		if(index >= limit || index >= length)
+	success(arrayClass == ClassArrayPointer || arrayClass == ClassStringPointer);
+	if (success()) {
+		if (index >= limit || index >= length)
 			push(TruePointer);
 		else
 			push(FalsePointer);
 	}
 	else
 		unPop(1);
-		
-		#endif
+
+#endif
 }
 
-
-// checkIndexableBoundsOf:in:
 void Interpreter::checkIndexableBoundsOf_in(int index, int array) {
 	
 	/* "source"
@@ -168,14 +161,12 @@ void Interpreter::checkIndexableBoundsOf_in(int index, int array) {
 	success(index <= lengthOf(array));
 }
 
-
-// primitiveNextPut
 void Interpreter::primitiveNextPut() {
-		
-		#ifndef IMPLEMENT_PRIMITIVE_NEXT_PUT
+
+#ifndef IMPLEMENT_PRIMITIVE_NEXT_PUT
 	primitiveFail();
-		
-		#else
+#else
+	
 	int value;
 	int stream;
 	int index;
@@ -227,11 +218,11 @@ void Interpreter::primitiveNextPut() {
 	index = fetchInteger_ofObject(StreamIndexIndex, stream);
 	limit = fetchInteger_ofObject(StreamWriteLimitIndex, stream);
 	success(index < limit);
-	success(arrayClass==ClassArrayPointer || arrayClass==ClassStringPointer);
+	success(arrayClass == ClassArrayPointer || arrayClass == ClassStringPointer);
 	checkIndexableBoundsOf_in(index + 1, array);
-	if(success()) {
+	if (success()) {
 		index = index + 1;
-		if(arrayClass==ClassArrayPointer)
+		if (arrayClass == ClassArrayPointer)
 			subscript_with_storing(array, index, value);
 		else {
 			ascii = memory.fetchPointer_ofObject(CharacterValueIndex, value);
@@ -239,17 +230,16 @@ void Interpreter::primitiveNextPut() {
 		}
 	}
 	
-	if(success())
+	if (success())
 		storeInteger_ofObject_withValue(StreamIndexIndex, stream, index);
-	if(success())
+	if (success())
 		push(value);
 	else
 		unPop(2);
-		#endif
+
+#endif
 }
 
-
-// lengthOf:
 int Interpreter::lengthOf(int array) {
 	/* "source"
    	(self isWords: (memory fetchClassOf: array))
@@ -257,19 +247,17 @@ int Interpreter::lengthOf(int array) {
    		ifFalse: [^memory fetchByteLengthOf: array]
    */
 	
-	if(isWords(memory.fetchClassOf(array)))
+	if (isWords(memory.fetchClassOf(array)))
 		return memory.fetchWordLengthOf(array);
 	else
 		return memory.fetchByteLengthOf(array);
 }
 
-
-// primitiveNext
 void Interpreter::primitiveNext() {
-		
-		#ifndef IMPLEMENT_PRIMITIVE_NEXT
+
+#ifndef IMPLEMENT_PRIMITIVE_NEXT
 	primitiveFail();
-		#else
+#else
 	
 	int stream;
 	int index;
@@ -315,18 +303,18 @@ void Interpreter::primitiveNext() {
 	index = fetchInteger_ofObject(StreamIndexIndex, stream);
 	limit = fetchInteger_ofObject(StreamReadLimitIndex, stream);
 	success(index < limit);
-	success(arrayClass==ClassArrayPointer || arrayClass==ClassStringPointer);
+	success(arrayClass == ClassArrayPointer || arrayClass == ClassStringPointer);
 	checkIndexableBoundsOf_in(index + 1, array);
-	if(success()) {
+	if (success()) {
 		index = index + 1;
 		result = subscript_with(array, index);
 	}
 	
-	if(success())
+	if (success())
 		storeInteger_ofObject_withValue(StreamIndexIndex, stream, index);
 	
-	if(success()) {
-		if(arrayClass==ClassArrayPointer)
+	if (success()) {
+		if (arrayClass == ClassArrayPointer)
 			push(result);
 		else {
 			ascii = memory.integerValueOf(result);
@@ -335,12 +323,10 @@ void Interpreter::primitiveNext() {
 	}
 	else
 		unPop(1);
-		
-		#endif
+
+#endif
 }
 
-
-// dispatchSubscriptAndStreamPrimitives
 void Interpreter::dispatchSubscriptAndStreamPrimitives() {
 	
 	/* "source"
@@ -353,6 +339,7 @@ void Interpreter::dispatchSubscriptAndStreamPrimitives() {
    	primitiveIndex = 66 ifTrue: [^self primitiveNextPut].
    	primitiveIndex = 67 ifTrue: [^self primitiveAtEnd]
    */
+	
 	switch (primitiveIndex) {
 		case 60:
 			primitiveAt();
@@ -381,8 +368,6 @@ void Interpreter::dispatchSubscriptAndStreamPrimitives() {
 	}
 }
 
-
-// primitiveStringAt
 void Interpreter::primitiveStringAt() {
 	int index;
 	int array;
@@ -408,19 +393,17 @@ void Interpreter::primitiveStringAt() {
 	array = popStack();
 	checkIndexableBoundsOf_in(index, array);
 	
-	if(success()) {
+	if (success()) {
 		ascii = memory.integerValueOf(subscript_with(array, index));
 		character = memory.fetchPointer_ofObject(ascii, CharacterTablePointer);
 	}
 	
-	if(success())
+	if (success())
 		push(character);
 	else
 		unPop(2);
 }
 
-
-// primitiveAt
 void Interpreter::primitiveAt() {
 	int index;
 	int array;
@@ -447,19 +430,17 @@ void Interpreter::primitiveAt() {
 	arrayClass = memory.fetchClassOf(array);
 	checkIndexableBoundsOf_in(index, array);
 	
-	if(success()) {
+	if (success()) {
 		index = index + fixedFieldsOf(arrayClass);
 		result = subscript_with(array, index);
 	}
 	
-	if(success())
+	if (success())
 		push(result);
 	else
 		unPop(2);
 }
 
-
-// primitiveSize
 void Interpreter::primitiveSize() {
 	int array;
 	int cls;
@@ -479,19 +460,17 @@ void Interpreter::primitiveSize() {
 	
 	array = popStack();
 	success(!memory.isIntegerObject(array));
-	if(success()) {
+	if (success()) {
 		cls = memory.fetchClassOf(array);
 		length = positive16BitIntegerFor(lengthOf(array) - fixedFieldsOf(cls));
 	}
 	
-	if(success())
+	if (success())
 		push(length);
 	else
 		unPop(1);
 }
 
-
-// primitiveStringAtPut
 void Interpreter::primitiveStringAtPut() {
 	int index;
 	int array;
@@ -519,21 +498,19 @@ void Interpreter::primitiveStringAtPut() {
 	index = positive16BitValueOf(popStack());
 	array = popStack();
 	checkIndexableBoundsOf_in(index, array);
-	success(memory.fetchClassOf(character)==ClassCharacterPointer);
+	success(memory.fetchClassOf(character) == ClassCharacterPointer);
 	
-	if(success()) {
+	if (success()) {
 		ascii = memory.fetchPointer_ofObject(CharacterValueIndex, character);
 		subscript_with_storing(array, index, ascii);
 	}
 	
-	if(success())
+	if (success())
 		push(character);
 	else
 		unPop(3);
 }
 
-
-// subscript:with:
 int Interpreter::subscript_with(int array, int index) {
 	int cls;
 	int value;
@@ -553,8 +530,8 @@ int Interpreter::subscript_with(int array, int index) {
    */
 	cls = memory.fetchClassOf(array);
 	
-	if(isWords(cls)) {
-		if(isPointers(cls))
+	if (isWords(cls)) {
+		if (isPointers(cls))
 			return memory.fetchPointer_ofObject(index - 1, array);
 		else {
 			value = memory.fetchWord_ofObject(index - 1, array);
@@ -566,8 +543,6 @@ int Interpreter::subscript_with(int array, int index) {
 	return memory.integerObjectOf(value);
 }
 
-
-// primitiveAtPut
 void Interpreter::primitiveAtPut() {
 	
 	int array;
@@ -597,19 +572,17 @@ void Interpreter::primitiveAtPut() {
 	arrayClass = memory.fetchClassOf(array);
 	
 	checkIndexableBoundsOf_in(index, array);
-	if(success()) {
+	if (success()) {
 		index = index + fixedFieldsOf(arrayClass);
 		subscript_with_storing(array, index, value);
 	}
 	
-	if(success())
+	if (success())
 		push(value);
 	else
 		unPop(3);
 }
 
-
-// subscript:with:storing:
 void Interpreter::subscript_with_storing(int array, int index, int value) {
 	int cls;
 	
@@ -637,34 +610,30 @@ void Interpreter::subscript_with_storing(int array, int index, int value) {
    */
 	
 	cls = memory.fetchClassOf(array);
-	if(isWords(cls)) {
-		if(isPointers(cls))
+	if (isWords(cls)) {
+		if (isPointers(cls))
 			memory.storePointer_ofObject_withValue(index - 1, array, value);
 		else {
-			success(memory.isIntegerObject(value) || memory.fetchClassOf(value)==ClassLargePositiveIntegerPointer);
-			if(success())
+			success(memory.isIntegerObject(value) || memory.fetchClassOf(value) == ClassLargePositiveIntegerPointer);
+			if (success())
 				memory.storeWord_ofObject_withValue(index - 1, array, positive16BitValueOf(value));
 		}
 	}
 	else {
 		success(memory.isIntegerObject(value));
-		if(success())
+		if (success())
 			memory.storeByte_ofObject_withValue(index - 1, array, lowByteOf(memory.integerValueOf(value)));
 	}
 }
 
+// The instruction pointer stored in a context is a one-relative index to
+// the method's fields because subscripting in Smalltalk (i.e., the at: message)
+// takes one-relative indices.
+//
+// The memory, however, uses zero-relative indices; so the fetchContextRegisters
+// routine subtracts one to convert it to a memory index and the
+// storeContextRegisters routine adds the one back in.
 
-/*
- The instruction pointer stored in a context is a one-relative index to
- the method's fields because subscripting in Smalltalk (i.e., the at: message)
- takes one-relative indices.
- 
- The memory, however, uses zero-relative indices; so the fetchContextRegisters
- routine subtracts one to convert it to a memory index and the
- storeContextRegisters routine adds the one back in.
-*/
-
-// storeContextRegisters
 void Interpreter::storeContextRegisters() {
 	
 	/* "source"
@@ -678,7 +647,6 @@ void Interpreter::storeContextRegisters() {
 	storeStackPointerValue_inContext(stackPointer - TempFrameStart + 1, activeContext);
 }
 
-// isBlockContext:
 bool Interpreter::isBlockContext(int contextPointer) {
 	int methodOrArguments;
 	
@@ -693,7 +661,6 @@ bool Interpreter::isBlockContext(int contextPointer) {
 	
 }
 
-// newActiveContext:
 void Interpreter::newActiveContext(int aContext) {
 	/* "source"
    	self storeContextRegisters.
@@ -710,11 +677,14 @@ void Interpreter::newActiveContext(int aContext) {
 	fetchContextRegisters();
 }
 
-/*
- The instruction pointer stored in a context is a one-relative index to the method's fields because subscripting in Smalltalk (i.e., the at: message)takes one-relative indices. The memory, however, uses zero-relative indices; so the fetchContextRegisters routine subtracts one to convert it to a memory index and the storeContextRegisters routine adds the one back in.
-*/
 
-// fetchContextRegisters
+// The instruction pointer stored in a context is a one-relative index
+// to the method's fields because subscripting in Smalltalk
+// (i.e., the at: message)takes one-relative indices.
+// The memory, however, uses zero-relative indices;
+// so the fetchContextRegisters routine subtracts one to convert it to
+// a memory index and the storeContextRegisters routine adds the one back in.
+
 void Interpreter::fetchContextRegisters() {
 	/* "source"
    	(self isBlockContext: activeContext)
@@ -730,7 +700,7 @@ void Interpreter::fetchContextRegisters() {
    		(self stackPointerOfContext: activeContext) + TempFrameStart - 1
    */
 	
-	if(isBlockContext(activeContext))
+	if (isBlockContext(activeContext))
 		homeContext = memory.fetchPointer_ofObject(HomeIndex, activeContext);
 	else
 		homeContext = activeContext;
@@ -741,7 +711,6 @@ void Interpreter::fetchContextRegisters() {
 	stackPointer = stackPointerOfContext(activeContext) + TempFrameStart - 1;
 }
 
-// dispatchInputOutputPrimitives
 void Interpreter::dispatchInputOutputPrimitives() {
 	
 	/* "source"
@@ -836,9 +805,9 @@ void Interpreter::primitiveCursorLocPut() {
      the argument is not a Point.
      */
 	int point = popStack();
-	success(memory.fetchClassOf(point)==ClassPointPointer);
+	success(memory.fetchClassOf(point) == ClassPointPointer);
 	
-	if(success()) {
+	if (success()) {
 		int x = fetchInteger_ofObject(XIndex, point);
 		int y = fetchInteger_ofObject(YIndex, point);
 		hal->set_cursor_location(x, y);
@@ -853,7 +822,7 @@ void Interpreter::primitiveCursorLink() {
      Decouple the cursor from the pointing device if the argument is false.
      */
 	int flag = popStack();
-	hal->set_link_cursor(flag==TruePointer);
+	hal->set_link_cursor(flag == TruePointer);
 }
 
 void Interpreter::primitiveInputSemaphore() {
@@ -864,10 +833,10 @@ void Interpreter::primitiveInputSemaphore() {
      neither a Semaphore nor nil.
      */
 	int semaphore = popStack();
-	success(semaphore==NilPointer ||
-	        memory.fetchClassOf(semaphore)==ClassSemaphorePointer);
+	success(semaphore == NilPointer ||
+	        memory.fetchClassOf(semaphore) == ClassSemaphorePointer);
 	
-	if(success())
+	if (success())
 		hal->set_input_semaphore(semaphore);
 	else
 		unPop(1);
@@ -895,7 +864,7 @@ void Interpreter::primitiveInputWord() {
 	
 	std::uint16_t word;
 	bool result = hal->next_input_word(&word);
-	if(result) {
+	if (result) {
 		pop(1); // remove receiver
 		push(positive16BitIntegerFor(word));
 	}
@@ -903,14 +872,13 @@ void Interpreter::primitiveInputWord() {
 		primitiveFail();
 }
 
-
 // Return a oop to the display bitmap
 // Reference may become invalid on the next cycle of the interpreter...
 
 int Interpreter::getDisplayBits(int width, int height) {
 	// Return oop of display bits object
 	// sanity checking display width/height
-	if(currentDisplay==0)
+	if (currentDisplay == 0)
 		return 0; // No display yet
 	int displayBits = memory.fetchPointer_ofObject(BitsInForm, currentDisplay);
 	int computedSize = currentDisplayHeight * ((currentDisplayWidth + 15) / 16);
@@ -919,7 +887,7 @@ int Interpreter::getDisplayBits(int width, int height) {
 	// Smalltalk shrinks the display bitmap to a height of 100 behind our back
 	// when saving for example.
 	
-	if(computedSize!=actualSize)
+	if (computedSize != actualSize)
 		return 0;
 	return displayBits; // ok then...
 }
@@ -929,16 +897,16 @@ void Interpreter::updateDisplay(int destForm, int updatedX, int updatedY, int up
 	int width = fetchInteger_ofObject(WidthInForm, currentDisplay);
 	int height = fetchInteger_ofObject(HeightInForm, currentDisplay);
 	
-	if(currentDisplayWidth!=width || currentDisplayHeight!=height) {
+	if (currentDisplayWidth != width || currentDisplayHeight != height) {
 		// Display bits changed... possibly due to screen size change...
-		if(height <= 100)
+		if (height <= 100)
 			return; // See note in primitiveBeDisplay...
 		hal->set_display_size(width, height);
 		currentDisplayWidth = width;
 		currentDisplayHeight = height;
 	}
 	
-	if(updatedWidth > 0 && updatedHeight > 0)
+	if (updatedWidth > 0 && updatedHeight > 0)
 		hal->display_changed(updatedX, updatedY, updatedWidth, updatedHeight);
 }
 
@@ -960,7 +928,7 @@ void Interpreter::primitiveCopyBits() {
 	int rule = fetchInteger_ofObject(CombinationRuleIndex, bitBltPointer);
 	
 	success(between_and(rule, 0, 15));
-	if(success()) {
+	if (success()) {
 		BitBlt bitBlt(memory,
 		              destForm,
 		              sourceForm,
@@ -979,9 +947,9 @@ void Interpreter::primitiveCopyBits() {
 		
 		int updatedX, updatedY, updatedWidth, updatedHeight;
 		bitBlt.copyBits();
-		if(destForm==currentDisplay) {
+		if (destForm == currentDisplay) {
 			bitBlt.getUpdatedBounds(&updatedX, &updatedY, &updatedWidth, &updatedHeight);
-			if(updatedWidth > 0 && updatedHeight > 0)
+			if (updatedWidth > 0 && updatedHeight > 0)
 				updateDisplay(destForm, updatedX, updatedY, updatedWidth, updatedHeight);
 			
 		}
@@ -1074,11 +1042,11 @@ void Interpreter::primitiveSignalAtTick() {
 	int timePointer = popStack();
 	int semaphore = popStack();
 	
-	success(semaphore==NilPointer ||
-	        memory.fetchClassOf(semaphore)==ClassSemaphorePointer);
+	success(semaphore == NilPointer ||
+	        memory.fetchClassOf(semaphore) == ClassSemaphorePointer);
 	
-	if(success()) {
-		if(semaphore==NilPointer)
+	if (success()) {
+		if (semaphore == NilPointer)
 			semaphore = 0; // Tells HAL to cancel outstanding request
 		
 		std::uint32_t time =
@@ -1098,7 +1066,7 @@ void Interpreter::primitiveBeCursor() {
      Tell the interpreter to use the receiver as the current cursor image.  Fail if the
      receiver does not match the size expected by the hardware.
      */
-	if(currentCursor!=stackTop()) {
+	if (currentCursor != stackTop()) {
 		currentCursor = stackTop();
 		int cursorBitmap = memory.fetchPointer_ofObject(BitsInForm, currentCursor);
 		std::uint16_t bits[16];
@@ -1116,16 +1084,16 @@ void Interpreter::primitiveBeDisplay() {
      */
 	
 	int newDisplay = stackTop();
-	if(currentDisplay!=newDisplay) {
+	if (currentDisplay != newDisplay) {
 		int width = fetchInteger_ofObject(WidthInForm, newDisplay);
 		int height = fetchInteger_ofObject(HeightInForm, newDisplay);
 		// Intersting fact: In order to save space when writing the object image
 		// Smalltalk resizes the display to the current width x 100 just before saving.
 		// When the system resumes, it will be resized to the last actual size.
 		// Here we ignore the change to the height of 100.
-		if(height > 100) {
+		if (height > 100) {
 			
-			if(!hal->set_display_size(width, height))
+			if (!hal->set_display_size(width, height))
 				primitiveFail();
 			
 			currentDisplay = newDisplay;
@@ -1137,12 +1105,10 @@ void Interpreter::primitiveBeDisplay() {
 	}
 }
 
-// scanCharactersFrom: startIndex to: stopIndex in: sourceString rightX: rightX stopConditions: stops displaying: display
-
 void Interpreter::primitiveScanCharacters() {
-		
-		#ifdef IMPLEMENT_PRIMITIVE_SCANCHARS
-	bool displaying = popStack()==TruePointer;
+
+#ifdef IMPLEMENT_PRIMITIVE_SCANCHARS
+	bool displaying = popStack() == TruePointer;
 	int stops = popStack();
 	int rightX = popInteger();
 	int sourceString = popStack();
@@ -1168,7 +1134,7 @@ void Interpreter::primitiveScanCharacters() {
 	
 	// If not displaying, some of the fields are nil, so only
 	// fetch integers that are actually used...
-	if(displaying) {
+	if (displaying) {
 		destY = fetchInteger_ofObject(DestYIndex, scannerPointer);
 		clipX = fetchInteger_ofObject(ClipXIndex, scannerPointer);
 		clipY = fetchInteger_ofObject(ClipYIndex, scannerPointer);
@@ -1189,7 +1155,7 @@ void Interpreter::primitiveScanCharacters() {
 		height = 0;
 	}
 	
-	if(success()) {
+	if (success()) {
 		
 		CharacterScanner scanner(memory,
 		                         destForm,
@@ -1227,31 +1193,27 @@ void Interpreter::primitiveScanCharacters() {
 		storeInteger_ofObject_withValue(SourceXIndex, scannerPointer, scanner.updatedSourceX());
 		storeInteger_ofObject_withValue(LastIndexIndex, scannerPointer, scanner.updatedLastIndex());
 		
-		if(destForm==currentDisplay && displaying) {
+		if (destForm == currentDisplay && displaying) {
 			updateDisplay(destForm, clipX, clipY, clipWidth, clipHeight);
 		}
 		push(result);
 	}
 	else
 		unPop(7);
-		#else
+#else
 	primitiveFail();
-		#endif
+#endif
 	
 }
 
 void Interpreter::primitiveDrawLoop() {
-	// optional
-	primitiveFail();
+	primitiveFail();    // optional
 }
 
 void Interpreter::primitiveStringReplace() {
-	// optional
-	primitiveFail();
-	
+	primitiveFail();    // optional
 }
 
-// lookupMethodInDictionary:
 bool Interpreter::lookupMethodInDictionary(int dictionary) {
 	int length;
 	int index;
@@ -1289,17 +1251,17 @@ bool Interpreter::lookupMethodInDictionary(int dictionary) {
 	wrapAround = false;
 	for (;;) {
 		nextSelector = memory.fetchPointer_ofObject(index, dictionary);
-		if(nextSelector==NilPointer)
+		if (nextSelector == NilPointer)
 			return false;
-		if(nextSelector==messageSelector) {
+		if (nextSelector == messageSelector) {
 			methodArray = memory.fetchPointer_ofObject(MethodArrayIndex, dictionary);
 			newMethod = memory.fetchPointer_ofObject(index - SelectorStart, methodArray);
 			primitiveIndex = primitiveIndexOf(newMethod);
 			return true;
 		}
 		index = index + 1;
-		if(index==length) {
-			if(wrapAround)
+		if (index == length) {
+			if (wrapAround)
 				return false;
 			wrapAround = true;
 			index = SelectorStart;
@@ -1307,7 +1269,6 @@ bool Interpreter::lookupMethodInDictionary(int dictionary) {
 	}
 }
 
-// createActualMessage
 void Interpreter::createActualMessage() {
 	int argumentArray;
 	int message;
@@ -1370,8 +1331,6 @@ void Interpreter::createActualMessage() {
 	argumentCount = 1;
 }
 
-
-// lookupMethodInClass:
 bool Interpreter::lookupMethodInClass(int cls) {
 	int currentClass;
 	int dictionary;
@@ -1392,14 +1351,14 @@ bool Interpreter::lookupMethodInClass(int cls) {
    */
 	
 	currentClass = cls;
-	while (currentClass!=NilPointer) {
+	while (currentClass != NilPointer) {
 		dictionary = memory.fetchPointer_ofObject(MessageDictionaryIndex, currentClass);
-		if(lookupMethodInDictionary(dictionary))
+		if (lookupMethodInDictionary(dictionary))
 			return true;
 		currentClass = superclassOf(currentClass);
 	}
 	
-	if(messageSelector==DoesNotUnderstandSelector)
+	if (messageSelector == DoesNotUnderstandSelector)
 		error("Recursive not understood error encountered'");
 	
 	createActualMessage();
@@ -1407,8 +1366,6 @@ bool Interpreter::lookupMethodInClass(int cls) {
 	return lookupMethodInClass(cls);
 }
 
-
-// returnBytecode
 void Interpreter::returnBytecode() {
 	/* "source"
    	currentBytecode = 120
@@ -1452,8 +1409,6 @@ void Interpreter::returnBytecode() {
 	}
 }
 
-
-// nilContextFields
 void Interpreter::nilContextFields() {
 	/* "source"
    	memory storePointer: SenderIndex
@@ -1468,7 +1423,6 @@ void Interpreter::nilContextFields() {
 	memory.storePointer_ofObject_withValue(InstructionPointerIndex, activeContext, NilPointer);
 }
 
-// returnToActiveContext:
 void Interpreter::returnToActiveContext(int aContext) {
 	
 	/* "source"
@@ -1486,8 +1440,6 @@ void Interpreter::returnToActiveContext(int aContext) {
 	fetchContextRegisters();
 }
 
-
-// returnValue:to:
 void Interpreter::returnValue_to(int resultPointer, int contextPointer) {
 	
 	int sendersIP;
@@ -1511,14 +1463,14 @@ void Interpreter::returnValue_to(int resultPointer, int contextPointer) {
    	memory decreaseReferencesTo: resultPointer
    */
 	
-	if(contextPointer==NilPointer) {
+	if (contextPointer == NilPointer) {
 		push(activeContext);
 		push(resultPointer);
 		sendSelector_argumentCount(CannotReturnSelector, 1);
 		return;
 	}
 	sendersIP = memory.fetchPointer_ofObject(InstructionPointerIndex, contextPointer);
-	if(sendersIP==NilPointer) {
+	if (sendersIP == NilPointer) {
 		push(activeContext);
 		push(resultPointer);
 		sendSelector_argumentCount(CannotReturnSelector, 1);
@@ -1531,8 +1483,6 @@ void Interpreter::returnValue_to(int resultPointer, int contextPointer) {
 	memory.decreaseReferencesTo(resultPointer);
 }
 
-
-// synchronousSignal:
 void Interpreter::synchronousSignal(int aSemaphore) {
 	int excessSignals;
 	
@@ -1549,7 +1499,7 @@ void Interpreter::synchronousSignal(int aSemaphore) {
                     memory decreaseReferencesTo: aProcess]
    */
 	
-	if(isEmptyList(aSemaphore)) {
+	if (isEmptyList(aSemaphore)) {
 		excessSignals = fetchInteger_ofObject(ExcessSignalsIndex, aSemaphore);
 		storeInteger_ofObject_withValue(ExcessSignalsIndex, aSemaphore, excessSignals + 1);
 	}
@@ -1561,8 +1511,6 @@ void Interpreter::synchronousSignal(int aSemaphore) {
 	}
 }
 
-
-// primitiveBlockCopy
 void Interpreter::primitiveBlockCopy() {
 	int context;
 	int methodContext;
@@ -1602,7 +1550,7 @@ void Interpreter::primitiveBlockCopy() {
 	blockArgumentCount = popStack();
 	context = popStack();
 	
-	if(isBlockContext(context))
+	if (isBlockContext(context))
 		methodContext = memory.fetchPointer_ofObject(HomeIndex, context);
 	else
 		methodContext = context;
@@ -1618,8 +1566,6 @@ void Interpreter::primitiveBlockCopy() {
 	push(newContext);
 }
 
-
-// primitiveResume
 void Interpreter::primitiveResume() {
 	/* "source"
    	    self resume: self stackTop
@@ -1627,7 +1573,6 @@ void Interpreter::primitiveResume() {
 	resume(stackTop());
 }
 
-// primitivePerformWithArgs
 void Interpreter::primitivePerformWithArgs() {
 	int thisReceiver;
 	int performSelector;
@@ -1671,9 +1616,9 @@ void Interpreter::primitivePerformWithArgs() {
 	arraySize = memory.fetchWordLengthOf(argumentArray);
 	arrayClass = memory.fetchClassOf(argumentArray);
 	success((stackPointer + arraySize) < memory.fetchWordLengthOf(activeContext));
-	success(arrayClass==ClassArrayPointer);
+	success(arrayClass == ClassArrayPointer);
 	
-	if(success()) {
+	if (success()) {
 		performSelector = messageSelector;
 		messageSelector = popStack();
 		thisReceiver = stackTop();
@@ -1685,8 +1630,8 @@ void Interpreter::primitivePerformWithArgs() {
 		}
 		
 		lookupMethodInClass(memory.fetchClassOf(thisReceiver));
-		success(argumentCountOf(newMethod)==argumentCount);
-		if(success())
+		success(argumentCountOf(newMethod) == argumentCount);
+		if (success())
 			executeNewMethod();
 		else {
 			unPop(argumentCount);
@@ -1701,9 +1646,8 @@ void Interpreter::primitivePerformWithArgs() {
 	
 }
 
-// wakeHighestPriority
-//NOTE: Returns a referenced increased pointer that must be decreased by caller
 int Interpreter::wakeHighestPriority() {
+	//NOTE: Returns a referenced increased pointer that must be decreased by caller
 	int priority;
 	int processLists;
 	int processList;
@@ -1723,7 +1667,7 @@ int Interpreter::wakeHighestPriority() {
 	for (;;) {
 		assert(priority > 0);
 		processList = memory.fetchPointer_ofObject(priority - 1, processLists);
-		if(!isEmptyList(processList))
+		if (!isEmptyList(processList))
 			break;
 		priority = priority - 1;
 	}
@@ -1731,8 +1675,6 @@ int Interpreter::wakeHighestPriority() {
 	return removeFirstLinkOfList(processList);
 }
 
-
-// primitivePerform
 void Interpreter::primitivePerform() {
 	
 	int performSelector;
@@ -1762,8 +1704,8 @@ void Interpreter::primitivePerform() {
 	messageSelector = stackValue(argumentCount - 1);
 	newReceiver = stackValue(argumentCount);
 	lookupMethodInClass(memory.fetchClassOf(newReceiver));
-	success(argumentCountOf(newMethod)==argumentCount - 1);
-	if(success()) {
+	success(argumentCountOf(newMethod) == argumentCount - 1);
+	if (success()) {
 		selectorIndex = stackPointer - argumentCount + 1;
 		transfer_fromIndex_ofObject_toIndex_ofObject(
 			argumentCount - 1,
@@ -1781,7 +1723,6 @@ void Interpreter::primitivePerform() {
 		messageSelector = performSelector;
 }
 
-// primitiveValueWithArgs
 void Interpreter::primitiveValueWithArgs() {
 	
 	int argumentArray;
@@ -1824,12 +1765,12 @@ void Interpreter::primitiveValueWithArgs() {
 	blockContext = popStack();
 	blockArgumentCount = argumentCountOfBlock(blockContext);
 	arrayClass = memory.fetchClassOf(argumentArray);
-	success(arrayClass==ClassArrayPointer);
-	if(success()) {
+	success(arrayClass == ClassArrayPointer);
+	if (success()) {
 		arrayArgumentCount = memory.fetchWordLengthOf(argumentArray);
-		success(arrayArgumentCount==blockArgumentCount);
+		success(arrayArgumentCount == blockArgumentCount);
 	}
-	if(success()) {
+	if (success()) {
 		transfer_fromIndex_ofObject_toIndex_ofObject(
 			arrayArgumentCount,
 			0,
@@ -1863,8 +1804,6 @@ void Interpreter::primitiveValueWithArgs() {
 		unPop(2);
 }
 
-
-// removeFirstLinkOfList:
 int Interpreter::removeFirstLinkOfList(int aLinkedList) {
 	
 	int firstLink;
@@ -1910,7 +1849,7 @@ int Interpreter::removeFirstLinkOfList(int aLinkedList) {
 	
 	memory.increaseReferencesTo(firstLink);
 	lastLink = memory.fetchPointer_ofObject(LastLinkIndex, aLinkedList);
-	if(lastLink==firstLink) {
+	if (lastLink == firstLink) {
 		memory.storePointer_ofObject_withValue(FirstLinkIndex, aLinkedList, NilPointer);
 		memory.storePointer_ofObject_withValue(LastLinkIndex, aLinkedList, NilPointer);
 	}
@@ -1923,8 +1862,6 @@ int Interpreter::removeFirstLinkOfList(int aLinkedList) {
 	return firstLink;
 }
 
-
-// addLastLink:toList:
 void Interpreter::addLastLink_toList(int aLink, int aLinkedList) {
 	
 	int lastLink;
@@ -1948,7 +1885,7 @@ void Interpreter::addLastLink_toList(int aLink, int aLinkedList) {
    */
 	
 	
-	if(isEmptyList(aLinkedList))
+	if (isEmptyList(aLinkedList))
 		memory.storePointer_ofObject_withValue(FirstLinkIndex, aLinkedList, aLink);
 	else {
 		lastLink = memory.fetchPointer_ofObject(LastLinkIndex, aLinkedList);
@@ -1959,7 +1896,6 @@ void Interpreter::addLastLink_toList(int aLink, int aLinkedList) {
 	memory.storePointer_ofObject_withValue(MyListIndex, aLink, aLinkedList);
 }
 
-// primitiveWait
 void Interpreter::primitiveWait() {
 	
 	int thisReceiver;
@@ -1980,7 +1916,7 @@ void Interpreter::primitiveWait() {
 	
 	thisReceiver = stackTop();
 	excessSignals = fetchInteger_ofObject(ExcessSignalsIndex, thisReceiver);
-	if(excessSignals > 0)
+	if (excessSignals > 0)
 		storeInteger_ofObject_withValue(ExcessSignalsIndex, thisReceiver, excessSignals - 1);
 	else {
 		addLastLink_toList(activeProcess(), thisReceiver);
@@ -1988,8 +1924,6 @@ void Interpreter::primitiveWait() {
 	}
 }
 
-
-// primitiveFlushCache
 void Interpreter::primitiveFlushCache() {
 	/* "source"
    	self initializeMethodCache
@@ -1997,8 +1931,6 @@ void Interpreter::primitiveFlushCache() {
 	initializeMethodCache();
 }
 
-
-// suspendActive
 void Interpreter::suspendActive() {
 	/* "source"
     "dbanay: ref counting issue - wakeHighestPriority"
@@ -2013,8 +1945,6 @@ void Interpreter::suspendActive() {
 	memory.decreaseReferencesTo(aProcess);
 }
 
-
-// activeProcess
 int Interpreter::activeProcess() {
 	/* "source"
    	newProcessWaiting
@@ -2023,14 +1953,12 @@ int Interpreter::activeProcess() {
    				ofObject: self schedulerPointer]
    */
 	
-	if(newProcessWaiting)
+	if (newProcessWaiting)
 		return newProcess;
 	
 	return memory.fetchPointer_ofObject(ActiveProcessIndex, schedulerPointer());
 }
 
-
-// dispatchControlPrimitives
 void Interpreter::dispatchControlPrimitives() {
 	/* "source"
 	    primitiveIndex = 80 ifTrue: [^self primitiveBlockCopy].
@@ -2079,15 +2007,12 @@ void Interpreter::dispatchControlPrimitives() {
 	}
 }
 
-
 bool Interpreter::isInLowMemoryCondition() {
 	return oopsLeftLimit > 0 && wordsLeftLimit > 0 &&
 	       (memory.oopsLeft() < oopsLeftLimit ||
 	        memory.coreLeft() < wordsLeftLimit);
 }
 
-
-// checkProcessSwitch
 void Interpreter::checkProcessSwitch() {
 	int theActiveProcess;
 	
@@ -2114,20 +2039,20 @@ void Interpreter::checkProcessSwitch() {
    */
 	
 	//dbanay -- warn about low memory -- once
-	if(checkLowMemory) {
+	if (checkLowMemory) {
 		
 		bool memoryWasLow = memoryIsLow;
 		memoryIsLow = false;
 		
 		// the Smalltalk system treat oops or words limits being zero as don't check
-		if(lowSpaceSemaphore!=NilPointer &&
-		   oopsLeftLimit > 0 && wordsLeftLimit > 0) {
+		if (lowSpaceSemaphore != NilPointer &&
+		    oopsLeftLimit > 0 && wordsLeftLimit > 0) {
 			
-			if(isInLowMemoryCondition()) {
+			if (isInLowMemoryCondition()) {
 				memory.garbageCollect(); // Try to get some memory back...
-				if(isInLowMemoryCondition()) {
+				if (isInLowMemoryCondition()) {
 					memoryIsLow = true;
-					if(!memoryWasLow)
+					if (!memoryWasLow)
 						asynchronousSignal(lowSpaceSemaphore);
 				}
 			}
@@ -2141,7 +2066,7 @@ void Interpreter::checkProcessSwitch() {
 		semaphoreIndex = semaphoreIndex - 1;
 	}
 	
-	if(newProcessWaiting) {
+	if (newProcessWaiting) {
 		newProcessWaiting = false;
 		theActiveProcess = activeProcess();
 		memory.storePointer_ofObject_withValue(SuspendedContextIndex, theActiveProcess, activeContext);
@@ -2152,8 +2077,6 @@ void Interpreter::checkProcessSwitch() {
 	}
 }
 
-
-// primitiveSignal
 void Interpreter::primitiveSignal() {
 	/* "source"
    	    self synchronousSignal: self stackTop
@@ -2161,8 +2084,6 @@ void Interpreter::primitiveSignal() {
 	synchronousSignal(stackTop());
 }
 
-
-// isEmptyList:
 int Interpreter::isEmptyList(int aLinkedList) {
 	/* "source"
    	^(memory fetchPointer: FirstLinkIndex
@@ -2170,11 +2091,9 @@ int Interpreter::isEmptyList(int aLinkedList) {
    			= NilPointer
    */
 	
-	return memory.fetchPointer_ofObject(FirstLinkIndex, aLinkedList)==NilPointer;
+	return memory.fetchPointer_ofObject(FirstLinkIndex, aLinkedList) == NilPointer;
 }
 
-
-// primitiveSuspend
 void Interpreter::primitiveSuspend() {
 	/* "source"
    	self success: self stackTop = self activeProcess.
@@ -2183,16 +2102,14 @@ void Interpreter::primitiveSuspend() {
    			self push: NilPointer.
    			self suspendActive]
    */
-	success(stackTop()==activeProcess());
-	if(success()) {
+	success(stackTop() == activeProcess());
+	if (success()) {
 		popStack();
 		push(NilPointer);
 		suspendActive();
 	}
 }
 
-
-// primitiveValue
 void Interpreter::primitiveValue() {
 	int blockContext;
 	int blockArgumentCount;
@@ -2224,8 +2141,8 @@ void Interpreter::primitiveValue() {
 	
 	blockContext = stackValue(argumentCount);
 	blockArgumentCount = argumentCountOfBlock(blockContext);
-	success(argumentCount==blockArgumentCount);
-	if(success()) {
+	success(argumentCount == blockArgumentCount);
+	if (success()) {
 		transfer_fromIndex_ofObject_toIndex_ofObject(
 			argumentCount,
 			stackPointer - argumentCount + 1,
@@ -2256,8 +2173,6 @@ void Interpreter::primitiveValue() {
 	}
 }
 
-
-// firstContext
 int Interpreter::firstContext() {
 	/* "source"
    	newProcessWaiting <- false.
@@ -2270,21 +2185,18 @@ int Interpreter::firstContext() {
 	return memory.fetchPointer_ofObject(SuspendedContextIndex, activeProcess());
 }
 
-
-// asynchronousSignal:
 void Interpreter::asynchronousSignal(int aSemaphore) {
 	/* "source"
    	semaphoreIndex <- semaphoreIndex + 1.
    	semaphoreList at: semaphoreIndex put: aSemaphore
    */
 	semaphoreIndex = semaphoreIndex + 1;
-	if(semaphoreIndex==sizeof(semaphoreList) / sizeof(semaphoreList[0]))
+	if (semaphoreIndex == sizeof(semaphoreList) / sizeof(semaphoreList[0]))
 		error("overflow semaphore list");
 	semaphoreList[semaphoreIndex] = aSemaphore;
 	
 }
 
-// transferTo:
 void Interpreter::transferTo(int aProcess) {
 	/* "source"
    	newProcessWaiting <- true.
@@ -2293,15 +2205,13 @@ void Interpreter::transferTo(int aProcess) {
    	newProcess <- aProcess
    */
 	newProcessWaiting = true;
-	if(newProcess!=NilPointer)
+	if (newProcess != NilPointer)
 		memory.decreaseReferencesTo(newProcess);
 	
 	newProcess = aProcess;
 	memory.increaseReferencesTo(newProcess);
 }
 
-
-// resume:
 void Interpreter::resume(int aProcess) {
 	
 	int theActiveProcess;
@@ -2324,7 +2234,7 @@ void Interpreter::resume(int aProcess) {
 	activePriority = fetchInteger_ofObject(PriorityIndex, theActiveProcess);
 	newPriority = fetchInteger_ofObject(PriorityIndex, aProcess);
 	
-	if(newPriority > activePriority) {
+	if (newPriority > activePriority) {
 		sleep(theActiveProcess);
 		transferTo(aProcess);
 	}
@@ -2332,8 +2242,6 @@ void Interpreter::resume(int aProcess) {
 		sleep(aProcess);
 }
 
-
-// sleep:
 void Interpreter::sleep(int aProcess) {
 	
 	int priority;
@@ -2357,8 +2265,6 @@ void Interpreter::sleep(int aProcess) {
 	addLastLink_toList(aProcess, processList);
 }
 
-
-// primitiveClass
 void Interpreter::primitiveClass() {
 	int instance;
 	
@@ -2370,7 +2276,6 @@ void Interpreter::primitiveClass() {
 	instance = popStack();
 	push(memory.fetchClassOf(instance));
 }
-
 
 void Interpreter::primitiveCoreLeft() {
 	pop(1); // remove receiver
@@ -2405,8 +2310,8 @@ void Interpreter::primitiveSignalAtOopsLeftWordsLeft() {
 	int semaphore = popStack();
 	
 	// sempahore must either be nil or an instance of Semaphore
-	success(semaphore==NilPointer || memory.fetchClassOf(semaphore)==ClassSemaphorePointer);
-	if(success()) {
+	success(semaphore == NilPointer || memory.fetchClassOf(semaphore) == ClassSemaphorePointer);
+	if (success()) {
 		// Don't need to take reference since Smalltalk is waiting on it someplace else
 		lowSpaceSemaphore = semaphore;
 		oopsLeftLimit = numOops;
@@ -2417,8 +2322,6 @@ void Interpreter::primitiveSignalAtOopsLeftWordsLeft() {
 	
 }
 
-
-// dispatchSystemPrimitives
 void Interpreter::dispatchSystemPrimitives() {
 	/* "source"
    	primitiveIndex = 110 ifTrue: [^self primitiveEquivalent].
@@ -2455,8 +2358,6 @@ void Interpreter::dispatchSystemPrimitives() {
 	}
 }
 
-
-// primitiveEquivalent
 void Interpreter::primitiveEquivalent() {
 	int thisObject;
 	int otherObject;
@@ -2472,14 +2373,12 @@ void Interpreter::primitiveEquivalent() {
 	otherObject = popStack();
 	thisObject = popStack();
 	
-	if(thisObject==otherObject)
+	if (thisObject == otherObject)
 		push(TruePointer);
 	else
 		push(FalsePointer);
 }
 
-
-// dispatchPrimitives
 void Interpreter::dispatchPrimitives() {
 	/* "source"
    	primitiveIndex < 60
@@ -2497,24 +2396,23 @@ void Interpreter::dispatchPrimitives() {
    	primitiveIndex < 256
    		ifTrue: [^self dispatchPrivatePrimitives]
    */
-	if(primitiveIndex < 60)
+	if (primitiveIndex < 60)
 		dispatchArithmeticPrimitives();
-	else if(primitiveIndex < 68)
+	else if (primitiveIndex < 68)
 		dispatchSubscriptAndStreamPrimitives();
-	else if(primitiveIndex < 80)
+	else if (primitiveIndex < 80)
 		dispatchStorageManagementPrimitives();
-	else if(primitiveIndex < 90)
+	else if (primitiveIndex < 90)
 		dispatchControlPrimitives();
-	else if(primitiveIndex < 110)
+	else if (primitiveIndex < 110)
 		dispatchInputOutputPrimitives();
-	else if(primitiveIndex < 128)
+	else if (primitiveIndex < 128)
 		dispatchSystemPrimitives();
-	else if(primitiveIndex < 256) {
+	else if (primitiveIndex < 256) {
 		dispatchPrivatePrimitives();
 	}
 }
 
-// dispatchPrivatePrimitives
 void Interpreter::dispatchPrivatePrimitives() {
 	
 	switch (primitiveIndex) {
@@ -2557,7 +2455,7 @@ void Interpreter::primitivePosixLastErrorOperation() {
 void Interpreter::primitivePosixErrorStringOperation() {
 	int code = popInteger();
 	pop(1); // pop receiver
-	if(success())
+	if (success())
 		push(stringObjectFor(fileSystem->error_text(code)));
 	else
 		unPop(2);
@@ -2594,15 +2492,15 @@ void Interpreter::primitivePosixFileOperation() {
 	
 	// Code must be legit
 	success(code >= 0 && code <= 6);
-	success(file!=NilPointer);
+	success(file != NilPointer);
 	
-	if(success()) {
+	if (success()) {
 		switch (code) {
 			case 0:  // Read page
 			{
-				success(memory.fetchPointer_ofObject(DescriptorIndex, file)!=NilPointer);
-				success(page!=NilPointer);
-				if(success()) {
+				success(memory.fetchPointer_ofObject(DescriptorIndex, file) != NilPointer);
+				success(page != NilPointer);
+				if (success()) {
 					int fd = (int) positive32BitValueOf(memory.fetchPointer_ofObject(DescriptorIndex, file));
 					int pageNumber = fetchInteger_ofObject(PageNumberIndex, page);
 					assert(pageNumber >= 1);
@@ -2611,7 +2509,7 @@ void Interpreter::primitivePosixFileOperation() {
 					
 					int position = (pageNumber - 1) * PageSize;
 					
-					if(fileSystem->seek_to(fd, position)!=position) {
+					if (fileSystem->seek_to(fd, position) != position) {
 						push(FalsePointer);
 						return;
 					}
@@ -2630,9 +2528,9 @@ void Interpreter::primitivePosixFileOperation() {
 			
 			case 1: // Write page
 			{
-				success(memory.fetchPointer_ofObject(DescriptorIndex, file)!=NilPointer);
-				success(page!=NilPointer);
-				if(success()) {
+				success(memory.fetchPointer_ofObject(DescriptorIndex, file) != NilPointer);
+				success(page != NilPointer);
+				if (success()) {
 					int fd = (int) positive32BitValueOf(memory.fetchPointer_ofObject(DescriptorIndex, file));
 					int pageNumber = fetchInteger_ofObject(PageNumberIndex, page);
 					assert(pageNumber >= 1);
@@ -2641,7 +2539,7 @@ void Interpreter::primitivePosixFileOperation() {
 					
 					int position = (pageNumber - 1) * PageSize;
 					
-					if(fileSystem->seek_to(fd, position)!=position) {
+					if (fileSystem->seek_to(fd, position) != position) {
 						push(FalsePointer);
 						return;
 					}
@@ -2653,7 +2551,7 @@ void Interpreter::primitivePosixFileOperation() {
 						pageBuffer[i] = memory.fetchByte_ofObject(i, byteArray);
 					
 					// blast it out
-					if(fileSystem->write(fd, (char *) pageBuffer, bytesInPage)==bytesInPage)
+					if (fileSystem->write(fd, (char *) pageBuffer, bytesInPage) == bytesInPage)
 						push(TruePointer);
 					else
 						push(FalsePointer);
@@ -2663,13 +2561,13 @@ void Interpreter::primitivePosixFileOperation() {
 			
 			case 2: // truncate page (make it the last page). A nil page means truncate to zero bytes
 			{
-				success(memory.fetchPointer_ofObject(DescriptorIndex, file)!=NilPointer);
-				success(page!=NilPointer);
-				if(success()) {
+				success(memory.fetchPointer_ofObject(DescriptorIndex, file) != NilPointer);
+				success(page != NilPointer);
+				if (success()) {
 					
 					int result;
 					int fd = (int) positive32BitValueOf(memory.fetchPointer_ofObject(DescriptorIndex, file));
-					if(page!=NilPointer) {
+					if (page != NilPointer) {
 						int pageNumber = fetchInteger_ofObject(PageNumberIndex, page);
 						assert(pageNumber >= 1);
 						
@@ -2679,7 +2577,7 @@ void Interpreter::primitivePosixFileOperation() {
 					}
 					else
 						result = fileSystem->truncate_to(fd, 0);
-					push(result!=-1 ? TruePointer : FalsePointer);
+					push(result != -1 ? TruePointer : FalsePointer);
 				}
 				
 			}
@@ -2687,11 +2585,11 @@ void Interpreter::primitivePosixFileOperation() {
 			
 			case 3: // File size
 			{
-				success(memory.fetchPointer_ofObject(DescriptorIndex, file)!=NilPointer);
-				if(success()) {
+				success(memory.fetchPointer_ofObject(DescriptorIndex, file) != NilPointer);
+				if (success()) {
 					int fd = (int) positive32BitValueOf(memory.fetchPointer_ofObject(DescriptorIndex, file));
 					int size = fileSystem->file_size(fd);
-					if(size >= 0)
+					if (size >= 0)
 						push(positive32BitIntegerFor(size));
 					else
 						push(NilPointer);
@@ -2701,11 +2599,11 @@ void Interpreter::primitivePosixFileOperation() {
 			
 			case 4: // Open File
 			{
-				success(memory.fetchClassOf(name)==ClassStringPointer);
-				if(success()) {
+				success(memory.fetchClassOf(name) == ClassStringPointer);
+				if (success()) {
 					std::string fileName = stringFromObject(name);
 					int fd = fileSystem->open_file(fileName.c_str());
-					if(fd!=-1) {
+					if (fd != -1) {
 						memory.storePointer_ofObject_withValue(DescriptorIndex, file, positive32BitIntegerFor(fd));
 						push(TruePointer);
 					}
@@ -2721,13 +2619,13 @@ void Interpreter::primitivePosixFileOperation() {
 				int fd = (int) positive32BitValueOf(memory.fetchPointer_ofObject(DescriptorIndex, file));
 				int result = fileSystem->close_file(fd);
 				memory.storePointer_ofObject_withValue(DescriptorIndex, file, NilPointer);
-				push(result!=-1 ? TruePointer : FalsePointer);
+				push(result != -1 ? TruePointer : FalsePointer);
 			}
 				break;
 		}
 	}
 	
-	if(!success())
+	if (!success())
 		unPop(4);
 	
 }
@@ -2755,9 +2653,9 @@ void Interpreter::primitivePosixDirectoryOperation() {
 	pop(1); // remove receiver
 	
 	success(code >= 0 && code <= 3);
-	success(arg1==NilPointer || memory.fetchClassOf(arg1)==ClassStringPointer);
+	success(arg1 == NilPointer || memory.fetchClassOf(arg1) == ClassStringPointer);
 	
-	if(!success()) {
+	if (!success()) {
 		unPop(4);
 		return;
 	}
@@ -2768,7 +2666,7 @@ void Interpreter::primitivePosixDirectoryOperation() {
 			std::string s = stringFromObject(arg1);
 			int fd = fileSystem->create_file(s.c_str());
 			
-			if(fd!=-1)
+			if (fd != -1)
 				push(positive32BitIntegerFor(fd));
 			else
 				push(NilPointer);
@@ -2788,8 +2686,8 @@ void Interpreter::primitivePosixDirectoryOperation() {
 			int file = arg2;
 			int newNameObjectPointer = arg1;
 			int descriptorObjectPointer = memory.fetchPointer_ofObject(DescriptorIndex, file);
-			bool wasOpen = (descriptorObjectPointer!=NilPointer);
-			if(wasOpen) {
+			bool wasOpen = (descriptorObjectPointer != NilPointer);
+			if (wasOpen) {
 				int fd = (int) positive32BitValueOf(descriptorObjectPointer);
 				oldPos = fileSystem->tell(fd); // Save position for restore after we open new file...
 				// Some operating systems don't let you rename an open file...
@@ -2799,11 +2697,11 @@ void Interpreter::primitivePosixDirectoryOperation() {
 			std::string newName = stringFromObject(newNameObjectPointer);
 			std::string oldName = stringFromObject(memory.fetchPointer_ofObject(FileNameIndex, file));
 			
-			if(fileSystem->rename_file(oldName.c_str(), newName.c_str())) {
+			if (fileSystem->rename_file(oldName.c_str(), newName.c_str())) {
 				// Re-open and update descriptor of File object
-				if(wasOpen) {
+				if (wasOpen) {
 					int fd = fileSystem->open_file(newName.c_str());
-					if(fd!=-1) {
+					if (fd != -1) {
 						memory.storePointer_ofObject_withValue(DescriptorIndex,
 						                                       file, positive32BitIntegerFor(fd));
 						fileSystem->seek_to(fd, oldPos); // Restore position....
@@ -2816,10 +2714,10 @@ void Interpreter::primitivePosixDirectoryOperation() {
 				push(TruePointer);
 			}
 			else {
-				if(wasOpen) {
+				if (wasOpen) {
 					// Something failed. Open the original file again...if possible
 					int fd = fileSystem->open_file(oldName.c_str());
-					if(fd!=-1) {
+					if (fd != -1) {
 						memory.storePointer_ofObject_withValue(DescriptorIndex,
 						                                       file, positive32BitIntegerFor(fd));
 						fileSystem->seek_to(fd, oldPos); // Restore position....
@@ -2855,8 +2753,6 @@ void Interpreter::primitivePosixDirectoryOperation() {
 	}
 }
 
-
-// positive16BitValueOf:
 int Interpreter::positive16BitValueOf(int integerPointer) {
 	int value;
 	
@@ -2874,11 +2770,11 @@ int Interpreter::positive16BitValueOf(int integerPointer) {
    					ofObject: integerPointer).
    	^value
    */
-	if(memory.isIntegerObject(integerPointer))
+	if (memory.isIntegerObject(integerPointer))
 		return memory.integerValueOf(integerPointer);
-	if(memory.fetchClassOf(integerPointer)!=ClassLargePositiveIntegerPointer)
+	if (memory.fetchClassOf(integerPointer) != ClassLargePositiveIntegerPointer)
 		return primitiveFail();
-	if(memory.fetchByteLengthOf(integerPointer)!=2)
+	if (memory.fetchByteLengthOf(integerPointer) != 2)
 		return primitiveFail();
 	
 	value = memory.fetchByte_ofObject(1, integerPointer);
@@ -2886,27 +2782,25 @@ int Interpreter::positive16BitValueOf(int integerPointer) {
 	return value;
 }
 
-
 std::uint32_t Interpreter::positive32BitValueOf(int integerPointer) {
 	std::uint32_t value;
-	if(memory.isIntegerObject(integerPointer))
+	if (memory.isIntegerObject(integerPointer))
 		return memory.integerValueOf(integerPointer);
-	if(memory.fetchClassOf(integerPointer)!=ClassLargePositiveIntegerPointer)
+	if (memory.fetchClassOf(integerPointer) != ClassLargePositiveIntegerPointer)
 		return primitiveFail();
 	
 	int bytes = memory.fetchByteLengthOf(integerPointer);
 	value = memory.fetchByte_ofObject(0, integerPointer);
-	if(bytes > 1)
+	if (bytes > 1)
 		value |= memory.fetchByte_ofObject(1, integerPointer) << 8;
-	if(bytes > 2)
+	if (bytes > 2)
 		value |= memory.fetchByte_ofObject(2, integerPointer) << 16;
-	if(bytes > 3)
+	if (bytes > 3)
 		value |= ((std::uint32_t) memory.fetchByte_ofObject(3, integerPointer)) << 24;
 	
 	return value;
 }
 
-// primitiveResponse
 bool Interpreter::primitiveResponse() {
 	int flagValue;
 	
@@ -2925,13 +2819,13 @@ bool Interpreter::primitiveResponse() {
    			^self success]
    */
 	
-	if(primitiveIndex==0) {
+	if (primitiveIndex == 0) {
 		flagValue = flagValueOf(newMethod);
-		if(flagValue==5) {
+		if (flagValue == 5) {
 			quickReturnSelf();
 			return true;
 		}
-		if(flagValue==6) {
+		if (flagValue == 6) {
 			quickInstanceLoad();
 			return true;
 		}
@@ -2942,8 +2836,6 @@ bool Interpreter::primitiveResponse() {
 	return success();
 }
 
-
-// quickInstanceLoad
 void Interpreter::quickInstanceLoad() {
 	int thisReceiver;
 	int fieldIndex;
@@ -2959,8 +2851,6 @@ void Interpreter::quickInstanceLoad() {
 	push(memory.fetchPointer_ofObject(fieldIndex, thisReceiver));
 }
 
-
-// arithmeticSelectorPrimitive
 void Interpreter::arithmeticSelectorPrimitive() {
 	/* "source"
    	"ERROR: the next line is redundant"
@@ -2985,7 +2875,7 @@ void Interpreter::arithmeticSelectorPrimitive() {
    */
 	
 	//success(memory.isIntegerObject(stackValue(1)));
-	if(success()) {
+	if (success()) {
 		switch (currentBytecode) {
 			case 176:
 				primitiveAdd();
@@ -3039,7 +2929,6 @@ void Interpreter::arithmeticSelectorPrimitive() {
 	}
 }
 
-// positive16BitIntegerFor:
 int Interpreter::positive16BitIntegerFor(int integerValue) {
 	int newLargeInteger;
 	
@@ -3060,10 +2949,10 @@ int Interpreter::positive16BitIntegerFor(int integerValue) {
    	^newLargeInteger
    */
 	
-	if(integerValue < 0) {
+	if (integerValue < 0) {
 		return primitiveFail();
 	}
-	if(memory.isIntegerValue(integerValue))
+	if (memory.isIntegerValue(integerValue))
 		return memory.integerObjectOf(integerValue);
 	newLargeInteger = memory.instantiateClass_withBytes(ClassLargePositiveIntegerPointer, 2);
 	memory.storeByte_ofObject_withValue(0, newLargeInteger, lowByteOf(integerValue));
@@ -3073,7 +2962,7 @@ int Interpreter::positive16BitIntegerFor(int integerValue) {
 
 int Interpreter::positive32BitIntegerFor(int integerValue) {
 	
-	if(memory.isIntegerValue(integerValue))
+	if (memory.isIntegerValue(integerValue))
 		return memory.integerObjectOf(integerValue);
 	int newLargeInteger;
 	
@@ -3086,8 +2975,6 @@ int Interpreter::positive32BitIntegerFor(int integerValue) {
 	
 }
 
-
-// popInteger
 int Interpreter::popInteger() {
 	int integerPointer;
 	
@@ -3099,14 +2986,12 @@ int Interpreter::popInteger() {
    */
 	integerPointer = popStack();
 	success(memory.isIntegerObject(integerPointer));
-	if(success())
+	if (success())
 		return memory.integerValueOf(integerPointer);
 	
 	return std::numeric_limits<int>::min();
 }
 
-
-// specialSelectorPrimitiveResponse
 int Interpreter::specialSelectorPrimitiveResponse() {
 	/* "source"
    	self initPrimitive.
@@ -3118,15 +3003,13 @@ int Interpreter::specialSelectorPrimitiveResponse() {
    */
 	
 	initPrimitive();
-	if(between_and(currentBytecode, 176, 191))
+	if (between_and(currentBytecode, 176, 191))
 		arithmeticSelectorPrimitive();
-	else if(between_and(currentBytecode, 192, 207))
+	else if (between_and(currentBytecode, 192, 207))
 		commonSelectorPrimitive();
 	return success();
 }
 
-
-// commonSelectorPrimitive
 void Interpreter::commonSelectorPrimitive() {
 	int receiverClass;
 	
@@ -3150,28 +3033,26 @@ void Interpreter::commonSelectorPrimitive() {
 	
 	argumentCount = fetchInteger_ofObject((currentBytecode - 176) * 2 + 1, SpecialSelectorsPointer);
 	receiverClass = memory.fetchClassOf(stackValue(argumentCount));
-	if(currentBytecode==198) {
+	if (currentBytecode == 198) {
 		primitiveEquivalent();
 	}
-	else if(currentBytecode==199) {
+	else if (currentBytecode == 199) {
 		primitiveClass();
 	}
-	else if(currentBytecode==200) {
-		success(receiverClass==ClassMethodContextPointer || receiverClass==ClassBlockContextPointer);
-		if(success())
+	else if (currentBytecode == 200) {
+		success(receiverClass == ClassMethodContextPointer || receiverClass == ClassBlockContextPointer);
+		if (success())
 			primitiveBlockCopy();
 	}
-	else if(currentBytecode==201 || currentBytecode==202) {
-		success(receiverClass==ClassBlockContextPointer);
-		if(success())
+	else if (currentBytecode == 201 || currentBytecode == 202) {
+		success(receiverClass == ClassBlockContextPointer);
+		if (success())
 			primitiveValue();
 	}
 	else
 		primitiveFail();
 }
 
-
-// initializeMethodCache
 void Interpreter::initializeMethodCache() {
 	/* "source"
    	methodCacheSize <- 1024.
@@ -3181,8 +3062,6 @@ void Interpreter::initializeMethodCache() {
 		methodCache[i] = NilPointer;
 }
 
-
-// primitiveMod
 void Interpreter::primitiveMod() {
 	int integerReceiver;
 	int integerArgument;
@@ -3202,29 +3081,27 @@ void Interpreter::primitiveMod() {
 	
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
-	success(integerArgument!=0);
-	if(success()) {
+	success(integerArgument != 0);
+	if (success()) {
 		integerResult = integerReceiver % integerArgument;
-		if(integerArgument < 0) {
-			if(integerResult > 0) {
+		if (integerArgument < 0) {
+			if (integerResult > 0) {
 				integerResult += integerArgument;
 			}
 		}
 		else {
-			if(integerResult < 0) {
+			if (integerResult < 0) {
 				integerResult += integerArgument;
 			}
 		}
 		success(memory.isIntegerValue(integerResult));
 	}
-	if(success())
+	if (success())
 		pushInteger(integerResult);
 	else
 		unPop(2);
 }
 
-
-// dispatchArithmeticPrimitives
 void Interpreter::dispatchArithmeticPrimitives() {
 	/* "source"
      primitiveIndex < 20
@@ -3234,19 +3111,17 @@ void Interpreter::dispatchArithmeticPrimitives() {
      primitiveIndex < 60
      ifTrue: [^self dispatchFloatPrimitives]
      */
-	if(primitiveIndex < 20) {
+	if (primitiveIndex < 20) {
 		dispatchIntegerPrimitives();
 	}
-	else if(primitiveIndex < 40) {
+	else if (primitiveIndex < 40) {
 		dispatchLargeIntegerPrimitives();
 	}
-	else if(primitiveIndex < 60) {
+	else if (primitiveIndex < 60) {
 		dispatchFloatPrimitives();
 	}
 }
 
-
-// primitiveEqual
 void Interpreter::primitiveEqual() {
 	int integerReceiver;
 	int integerArgument;
@@ -3264,8 +3139,8 @@ void Interpreter::primitiveEqual() {
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
 	
-	if(success()) {
-		if(integerReceiver==integerArgument)
+	if (success()) {
+		if (integerReceiver == integerArgument)
 			push(TruePointer);
 		else
 			push(FalsePointer);
@@ -3275,8 +3150,6 @@ void Interpreter::primitiveEqual() {
 	}
 }
 
-
-// primitiveBitOr
 void Interpreter::primitiveBitOr() {
 	int integerReceiver;
 	int integerArgument;
@@ -3295,7 +3168,7 @@ void Interpreter::primitiveBitOr() {
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
 	
-	if(success()) {
+	if (success()) {
 		integerResult = integerReceiver | integerArgument;
 		pushInteger(integerResult);
 	}
@@ -3303,12 +3176,11 @@ void Interpreter::primitiveBitOr() {
 		unPop(2);
 }
 
-
-// primitiveDivide
-// The primitive routine for division (associated with the selector/) is different than
-// the other three arithmetic primitives since it only produces a result if the division
-// is exact, otherwise the primitive fails.
 void Interpreter::primitiveDivide() {
+	// The primitive routine for division (associated with the selector/) is different than
+	// the other three arithmetic primitives since it only produces a result if the division
+	// is exact, otherwise the primitive fails.
+	
 	int integerReceiver;
 	int integerArgument;
 	int integerResult = 0; // eliminate warning
@@ -3328,20 +3200,18 @@ void Interpreter::primitiveDivide() {
 	
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
-	success(integerArgument!=0);
-	success(integerReceiver % integerArgument==0);
-	if(success()) {
+	success(integerArgument != 0);
+	success(integerReceiver % integerArgument == 0);
+	if (success()) {
 		integerResult = integerReceiver / integerArgument;
 		success(memory.isIntegerValue(integerResult));
 	}
-	if(success())
+	if (success())
 		push(memory.integerObjectOf(integerResult));
 	else
 		unPop(2);
 }
 
-
-// primitiveMultiply
 void Interpreter::primitiveMultiply() {
 	int integerReceiver;
 	int integerArgument;
@@ -3361,17 +3231,16 @@ void Interpreter::primitiveMultiply() {
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
 	
-	if(success()) {
+	if (success()) {
 		integerResult = integerReceiver * integerArgument;
 		success(memory.isIntegerValue(integerResult));
 	}
-	if(success())
+	if (success())
 		pushInteger(integerResult);
 	else
 		unPop(2);
 }
 
-// primitiveBitAnd
 void Interpreter::primitiveBitAnd() {
 	int integerReceiver;
 	int integerArgument;
@@ -3391,7 +3260,7 @@ void Interpreter::primitiveBitAnd() {
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
 	
-	if(success()) {
+	if (success()) {
 		integerResult = integerReceiver & integerArgument;
 		pushInteger(integerResult);
 	}
@@ -3399,8 +3268,6 @@ void Interpreter::primitiveBitAnd() {
 		unPop(2);
 }
 
-
-// primitiveSubtract
 void Interpreter::primitiveSubtract() {
 	int integerReceiver;
 	int integerArgument;
@@ -3420,18 +3287,16 @@ void Interpreter::primitiveSubtract() {
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
 	
-	if(success()) {
+	if (success()) {
 		integerResult = integerReceiver - integerArgument;
 		success(memory.isIntegerValue(integerResult));
 	}
-	if(success())
+	if (success())
 		pushInteger(integerResult);
 	else
 		unPop(2);
 }
 
-
-// dispatchIntegerPrimitives
 void Interpreter::dispatchIntegerPrimitives() {
 	/* "source"
    	primitiveIndex = 1 ifTrue: [^self primitiveAdd].
@@ -3512,8 +3377,6 @@ void Interpreter::dispatchIntegerPrimitives() {
 	}
 }
 
-
-// primitiveGreaterOrEqual
 void Interpreter::primitiveGreaterOrEqual() {
 	int integerReceiver;
 	int integerArgument;
@@ -3530,8 +3393,8 @@ void Interpreter::primitiveGreaterOrEqual() {
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
 	
-	if(success()) {
-		if(integerReceiver >= integerArgument)
+	if (success()) {
+		if (integerReceiver >= integerArgument)
 			push(TruePointer);
 		else
 			push(FalsePointer);
@@ -3540,8 +3403,6 @@ void Interpreter::primitiveGreaterOrEqual() {
 		unPop(2);
 }
 
-
-// primitiveAdd
 void Interpreter::primitiveAdd() {
 	int integerReceiver;
 	int integerArgument;
@@ -3560,18 +3421,16 @@ void Interpreter::primitiveAdd() {
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
 	
-	if(success()) {
+	if (success()) {
 		integerResult = integerReceiver + integerArgument;
 		success(memory.isIntegerValue(integerResult));
 	}
-	if(success())
+	if (success())
 		pushInteger(integerResult);
 	else
 		unPop(2);
 }
 
-
-// primitiveNotEqual
 void Interpreter::primitiveNotEqual() {
 	int integerReceiver;
 	int integerArgument;
@@ -3588,8 +3447,8 @@ void Interpreter::primitiveNotEqual() {
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
 	
-	if(success()) {
-		if(integerReceiver!=integerArgument)
+	if (success()) {
+		if (integerReceiver != integerArgument)
 			push(TruePointer);
 		else
 			push(FalsePointer);
@@ -3598,8 +3457,6 @@ void Interpreter::primitiveNotEqual() {
 		unPop(2);
 }
 
-
-// primitiveQuo
 void Interpreter::primitiveQuo() {
 	int integerReceiver;
 	int integerArgument;
@@ -3618,20 +3475,18 @@ void Interpreter::primitiveQuo() {
    */
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
-	success(integerArgument!=0);
+	success(integerArgument != 0);
 	
-	if(success()) {
+	if (success()) {
 		integerResult = integerReceiver / integerArgument;
 		success(memory.isIntegerValue(integerResult));
 	}
-	if(success())
+	if (success())
 		push(memory.integerObjectOf(integerResult));
 	else
 		unPop(2);
 }
 
-
-// dispatchFloatPrimitives
 void Interpreter::dispatchFloatPrimitives() {
 	/* "source"
    	primitiveIndex = 40 ifTrue: [^self primitiveAsFloat].
@@ -3701,10 +3556,10 @@ void Interpreter::dispatchFloatPrimitives() {
 	
 }
 
-// The primitiveAsFloat routine converts its SmallInteger receiver into a Float.
 void Interpreter::primitiveAsFloat() {
+	// The primitiveAsFloat routine converts its SmallInteger receiver into a Float.
 	int integerArgument = popInteger();
-	if(success()) {
+	if (success()) {
 		pushFloat((float) integerArgument);
 	}
 	else
@@ -3718,7 +3573,7 @@ void Interpreter::primitiveFloatAdd() {
 	
 	floatArgument = popFloat();
 	floatReceiver = popFloat();
-	if(success()) {
+	if (success()) {
 		floatResult = floatReceiver + floatArgument;
 		pushFloat(floatResult);
 	}
@@ -3733,7 +3588,7 @@ void Interpreter::primitiveFloatSubtract() {
 	
 	floatArgument = popFloat();
 	floatReceiver = popFloat();
-	if(success()) {
+	if (success()) {
 		floatResult = floatReceiver - floatArgument;
 		pushFloat(floatResult);
 	}
@@ -3748,8 +3603,8 @@ void Interpreter::primitiveFloatLessThan() {
 	floatArgument = popFloat();
 	floatReceiver = popFloat();
 	
-	if(success()) {
-		if(floatReceiver < floatArgument)
+	if (success()) {
+		if (floatReceiver < floatArgument)
 			push(TruePointer);
 		else
 			push(FalsePointer);
@@ -3765,8 +3620,8 @@ void Interpreter::primitiveFloatGreaterThan() {
 	floatArgument = popFloat();
 	floatReceiver = popFloat();
 	
-	if(success()) {
-		if(floatReceiver > floatArgument)
+	if (success()) {
+		if (floatReceiver > floatArgument)
 			push(TruePointer);
 		else
 			push(FalsePointer);
@@ -3782,8 +3637,8 @@ void Interpreter::primitiveFloatLessOrEqual() {
 	floatArgument = popFloat();
 	floatReceiver = popFloat();
 	
-	if(success()) {
-		if(floatReceiver <= floatArgument)
+	if (success()) {
+		if (floatReceiver <= floatArgument)
 			push(TruePointer);
 		else
 			push(FalsePointer);
@@ -3799,8 +3654,8 @@ void Interpreter::primitiveFloatGreaterOrEqual() {
 	floatArgument = popFloat();
 	floatReceiver = popFloat();
 	
-	if(success()) {
-		if(floatReceiver >= floatArgument)
+	if (success()) {
+		if (floatReceiver >= floatArgument)
 			push(TruePointer);
 		else
 			push(FalsePointer);
@@ -3816,8 +3671,8 @@ void Interpreter::primitiveFloatEqual() {
 	floatArgument = popFloat();
 	floatReceiver = popFloat();
 	
-	if(success()) {
-		if(floatReceiver==floatArgument)
+	if (success()) {
+		if (floatReceiver == floatArgument)
 			push(TruePointer);
 		else
 			push(FalsePointer);
@@ -3833,8 +3688,8 @@ void Interpreter::primitiveFloatNotEqual() {
 	floatArgument = popFloat();
 	floatReceiver = popFloat();
 	
-	if(success()) {
-		if(floatReceiver!=floatArgument)
+	if (success()) {
+		if (floatReceiver != floatArgument)
 			push(TruePointer);
 		else
 			push(FalsePointer);
@@ -3850,7 +3705,7 @@ void Interpreter::primitiveFloatMultiply() {
 	
 	floatArgument = popFloat();
 	floatReceiver = popFloat();
-	if(success()) {
+	if (success()) {
 		floatResult = floatReceiver * floatArgument;
 		pushFloat(floatResult);
 	}
@@ -3865,8 +3720,8 @@ void Interpreter::primitiveFloatDivide() {
 	
 	floatArgument = popFloat();
 	floatReceiver = popFloat();
-	success(floatArgument!=0);
-	if(success()) {
+	success(floatArgument != 0);
+	if (success()) {
 		floatResult = floatReceiver / floatArgument;
 		pushFloat(floatResult);
 	}
@@ -3878,12 +3733,12 @@ void Interpreter::primitiveTruncated() {
 	float floatReceiver;
 	int integerResult = 0;
 	floatReceiver = popFloat();
-	if(success()) {
+	if (success()) {
 		integerResult = (int) floatReceiver;
 		success(memory.isIntegerValue(integerResult));
 	}
 	
-	if(success()) {
+	if (success()) {
 		pushInteger(integerResult);
 	}
 	else
@@ -3894,7 +3749,7 @@ void Interpreter::primitiveFractionalPart() {
 	float floatReceiver;
 	float floatResult;
 	floatReceiver = popFloat();
-	if(success()) {
+	if (success()) {
 		floatResult = floatReceiver - (int) floatReceiver;
 		pushFloat(floatResult);
 	}
@@ -3902,7 +3757,6 @@ void Interpreter::primitiveFractionalPart() {
 		unPop(1);
 }
 
-// primitiveLessOrEqual
 void Interpreter::primitiveLessOrEqual() {
 	int integerReceiver;
 	int integerArgument;
@@ -3919,8 +3773,8 @@ void Interpreter::primitiveLessOrEqual() {
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
 	
-	if(success()) {
-		if(integerReceiver <= integerArgument)
+	if (success()) {
+		if (integerReceiver <= integerArgument)
 			push(TruePointer);
 		else
 			push(FalsePointer);
@@ -3929,8 +3783,6 @@ void Interpreter::primitiveLessOrEqual() {
 		unPop(2);
 }
 
-
-// primitiveMakePoint
 void Interpreter::primitiveMakePoint() {
 	int integerReceiver;
 	int integerArgument;
@@ -3961,7 +3813,7 @@ void Interpreter::primitiveMakePoint() {
 	integerReceiver = popInteger();
 	success(memory.isIntegerValue(integerReceiver));
 	success(memory.isIntegerValue(integerArgument));
-	if(success()) {
+	if (success()) {
 		pointResult = memory.instantiateClass_withPointers(ClassPointPointer, ClassPointSize);
 		storeInteger_ofObject_withValue(XIndex, pointResult, integerReceiver);
 		storeInteger_ofObject_withValue(YIndex, pointResult, integerArgument);
@@ -3971,8 +3823,6 @@ void Interpreter::primitiveMakePoint() {
 		unPop(2);
 }
 
-
-// primitiveBitXor
 void Interpreter::primitiveBitXor() {
 	int integerReceiver;
 	int integerArgument;
@@ -3990,7 +3840,7 @@ void Interpreter::primitiveBitXor() {
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
 	
-	if(success()) {
+	if (success()) {
 		integerResult = integerReceiver ^ integerArgument;
 		pushInteger(integerResult);
 	}
@@ -3998,8 +3848,6 @@ void Interpreter::primitiveBitXor() {
 		unPop(2);
 }
 
-
-// primitiveLessThan
 void Interpreter::primitiveLessThan() {
 	int integerReceiver;
 	int integerArgument;
@@ -4016,8 +3864,8 @@ void Interpreter::primitiveLessThan() {
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
 	
-	if(success()) {
-		if(integerReceiver < integerArgument)
+	if (success()) {
+		if (integerReceiver < integerArgument)
 			push(TruePointer);
 		else
 			push(FalsePointer);
@@ -4028,8 +3876,6 @@ void Interpreter::primitiveLessThan() {
 	
 }
 
-
-// primitiveBitShift
 void Interpreter::primitiveBitShift() {
 	int integerReceiver;
 	int integerArgument;
@@ -4047,18 +3893,16 @@ void Interpreter::primitiveBitShift() {
    */
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
-	if(success()) {
+	if (success()) {
 		integerResult = integerArgument >= 0 ? integerReceiver << integerArgument : integerReceiver >> -integerArgument;
 		success(memory.isIntegerValue(integerResult));
 	}
-	if(success())
+	if (success())
 		pushInteger(integerResult);
 	else
 		unPop(2);
 }
 
-
-// primitiveGreaterThan
 void Interpreter::primitiveGreaterThan() {
 	int integerReceiver;
 	int integerArgument;
@@ -4075,8 +3919,8 @@ void Interpreter::primitiveGreaterThan() {
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
 	
-	if(success()) {
-		if(integerReceiver > integerArgument)
+	if (success()) {
+		if (integerReceiver > integerArgument)
 			push(TruePointer);
 		else
 			push(FalsePointer);
@@ -4085,8 +3929,6 @@ void Interpreter::primitiveGreaterThan() {
 		unPop(2);
 }
 
-
-// primitiveDiv
 void Interpreter::primitiveDiv() {
 	int integerReceiver;
 	int integerArgument;
@@ -4105,17 +3947,17 @@ void Interpreter::primitiveDiv() {
    */
 	integerArgument = popInteger();
 	integerReceiver = popInteger();
-	success(integerArgument!=0);
-	if(success()) {
+	success(integerArgument != 0);
+	if (success()) {
 		integerResult = integerReceiver / integerArgument;
-		if(integerReceiver % integerArgument!=0) {
+		if (integerReceiver % integerArgument != 0) {
 			// Smalltalk truncates to negative infinity ( -7 // 2 == -4 not -3)
-			if(integerResult < 0)
+			if (integerResult < 0)
 				integerResult--;
 		}
 		success(memory.isIntegerValue(integerResult));
 	}
-	if(success())
+	if (success())
 		push(memory.integerObjectOf(integerResult));
 	else
 		unPop(2);
@@ -4136,7 +3978,7 @@ std::string Interpreter::stringFromObject(int stringOrSymbolPointer) {
 }
 
 int Interpreter::stringObjectFor(const char *s) {
-	if(!s)
+	if (!s)
 		return NilPointer;
 	
 	const char *p = s;
@@ -4151,36 +3993,32 @@ int Interpreter::stringObjectFor(const char *s) {
 	return objectPointer;
 }
 
-
-#ifdef DEBUGGING_SUPPORT
-																														
-																														std::string Interpreter::selectorName(int selector)
-{
-    return stringFromObject(selector);
-}
+#ifdef DEBUG
+//{
+//    return stringFromObject(selector);
+//}
 
 std::string Interpreter::classNameOfObject(int objectPointer)
 {
-    return className(memory.fetchClassOf(objectPointer));
+	return className(memory.fetchClassOf(objectPointer));
 }
 
 std::string Interpreter::className(int classPointer)
 {
-    if (classPointer == ClassSmallInteger)
-        return "SmallInteger";
-    
-    if (classPointer == NilPointer)
-        return "UndefinedObject";
-    
-    int symbol = memory.fetchPointer_ofObject(6, classPointer);
-    if (memory.fetchClassOf(symbol) != ClassSymbolPointer)
-        return "<unknown>";
-    
-    return stringFromObject(symbol);
+	if (classPointer == ClassSmallInteger)
+		return "SmallInteger";
+	
+	if (classPointer == NilPointer)
+		return "UndefinedObject";
+	
+	int symbol = memory.fetchPointer_ofObject(6, classPointer);
+	if (memory.fetchClassOf(symbol) != ClassSymbolPointer)
+		return "<unknown>";
+	
+	return stringFromObject(symbol);
 }
 #endif
 
-// sendSelector:argumentCount:
 void Interpreter::sendSelector_argumentCount(int selector, int count) {
 	int newReceiver;
 	
@@ -4193,9 +4031,9 @@ void Interpreter::sendSelector_argumentCount(int selector, int count) {
 	messageSelector = selector;
 	argumentCount = count;
 	newReceiver = stackValue(argumentCount);
-		
-		#if 0
-																															#ifdef DEBUGGING_SUPPORT
+
+#if 0
+																															#ifdef DEBUG
     // Debugging aid that helped me figure out why stuff
     // wasn't working - intercept show: and error: messages and
     // display them
@@ -4231,12 +4069,10 @@ void Interpreter::sendSelector_argumentCount(int selector, int count) {
     }
 #endif
 #endif
-		#endif
+#endif
 	sendSelectorToClass(memory.fetchClassOf(newReceiver));
 }
 
-
-// findNewMethodInClass:
 void Interpreter::findNewMethodInClass(int cls) {
 	int hash;
 	
@@ -4258,7 +4094,7 @@ void Interpreter::findNewMethodInClass(int cls) {
 	// hash = ((messageSelector ^ cls) & 0xff) << 2;
 	
 	hash = (messageSelector & cls & 0xff) << 2; // removed +1 since C arrays are zero based
-	if(methodCache[hash]==messageSelector && methodCache[hash + 1]==cls) {
+	if (methodCache[hash] == messageSelector && methodCache[hash + 1] == cls) {
 		newMethod = methodCache[hash + 2];
 		primitiveIndex = methodCache[hash + 3];
 	}
@@ -4273,8 +4109,6 @@ void Interpreter::findNewMethodInClass(int cls) {
 	
 }
 
-
-// activateNewMethod
 void Interpreter::activateNewMethod() {
 	int contextSize;
 	int newContext;
@@ -4305,7 +4139,7 @@ void Interpreter::activateNewMethod() {
    	self newActiveContext: newContext
    */
 	
-	if(largeContextFlagOf(newMethod)==1)
+	if (largeContextFlagOf(newMethod) == 1)
 		contextSize = 32 + TempFrameStart;
 	else
 		contextSize = 12 + TempFrameStart;
@@ -4326,8 +4160,6 @@ void Interpreter::activateNewMethod() {
 	newActiveContext(newContext);
 }
 
-
-// sendSpecialSelectorBytecode
 void Interpreter::sendSpecialSelectorBytecode() {
 	int selectorIndex;
 	int selector;
@@ -4344,7 +4176,7 @@ void Interpreter::sendSpecialSelectorBytecode() {
    				argumentCount: count]
    */
 	
-	if(!specialSelectorPrimitiveResponse()) {
+	if (!specialSelectorPrimitiveResponse()) {
 		selectorIndex = (currentBytecode - 176) * 2;
 		selector = memory.fetchPointer_ofObject(selectorIndex, SpecialSelectorsPointer);
 		count = fetchInteger_ofObject(selectorIndex + 1, SpecialSelectorsPointer);
@@ -4352,8 +4184,6 @@ void Interpreter::sendSpecialSelectorBytecode() {
 	}
 }
 
-
-// doubleExtendedSuperBytecode
 void Interpreter::doubleExtendedSuperBytecode() {
 	int methodClass;
 	
@@ -4369,8 +4199,6 @@ void Interpreter::doubleExtendedSuperBytecode() {
 	sendSelectorToClass(superclassOf(methodClass));
 }
 
-
-// sendBytecode
 void Interpreter::sendBytecode() {
 	/* "source"
    	(currentBytecode between: 131 and: 134)
@@ -4380,17 +4208,15 @@ void Interpreter::sendBytecode() {
    	(currentBytecode between: 208 and: 255)
    		ifTrue: [^self sendLiteralSelectorBytecode]
    */
-	if(between_and(currentBytecode, 131, 134))
+	if (between_and(currentBytecode, 131, 134))
 		extendedSendBytecode();
-	else if(between_and(currentBytecode, 176, 207))
+	else if (between_and(currentBytecode, 176, 207))
 		sendSpecialSelectorBytecode();
-	else if(between_and(currentBytecode, 208, 255))
+	else if (between_and(currentBytecode, 208, 255))
 		sendLiteralSelectorBytecode();
 	
 }
 
-
-// doubleExtendedSendBytecode
 void Interpreter::doubleExtendedSendBytecode() {
 	int count;
 	int selector;
@@ -4407,8 +4233,6 @@ void Interpreter::doubleExtendedSendBytecode() {
 	sendSelector_argumentCount(selector, count);
 }
 
-
-// sendSelectorToClass:
 void Interpreter::sendSelectorToClass(int classPointer) {
 	/* "source"
    	self findNewMethodInClass: classPointer.
@@ -4418,8 +4242,6 @@ void Interpreter::sendSelectorToClass(int classPointer) {
 	executeNewMethod();
 }
 
-
-// sendLiteralSelectorBytecode
 void Interpreter::sendLiteralSelectorBytecode() {
 	int selector;
 	
@@ -4434,8 +4256,6 @@ void Interpreter::sendLiteralSelectorBytecode() {
 	sendSelector_argumentCount(selector, extractBits_to_of(10, 11, currentBytecode) - 1);
 }
 
-
-// singleExtendedSuperBytecode
 void Interpreter::singleExtendedSuperBytecode() {
 	int descriptor;
 	int selectorIndex;
@@ -4460,8 +4280,6 @@ void Interpreter::singleExtendedSuperBytecode() {
 	sendSelectorToClass(superclassOf(methodClass));
 }
 
-
-// singleExtendedSendBytecode
 void Interpreter::singleExtendedSendBytecode() {
 	int descriptor;
 	int selectorIndex;
@@ -4479,8 +4297,6 @@ void Interpreter::singleExtendedSendBytecode() {
 	sendSelector_argumentCount(literal(selectorIndex), extractBits_to_of(8, 10, descriptor));
 }
 
-
-// extendedSendBytecode
 void Interpreter::extendedSendBytecode() {
 	/* "source"
    	currentBytecode = 131 ifTrue: [^self singleExtendedSendBytecode].
@@ -4505,19 +4321,15 @@ void Interpreter::extendedSendBytecode() {
 	}
 }
 
-
-// executeNewMethod
 void Interpreter::executeNewMethod() {
 	/* "source"
    	self primitiveResponse
    		ifFalse: [self activateNewMethod]
    */
-	if(!primitiveResponse())
+	if (!primitiveResponse())
 		activateNewMethod();
 }
 
-
-// dispatchOnThisBytecode
 void Interpreter::dispatchOnThisBytecode() {
 	/* "source"
    	(currentBytecode between: 0 and: 119) ifTrue: [^self stackBytecode].
@@ -4528,31 +4340,29 @@ void Interpreter::dispatchOnThisBytecode() {
    	(currentBytecode between: 144 and: 175) ifTrue: [^self jumpBytecode].
    	(currentBytecode between: 176 and: 255) ifTrue: [^self sendBytecode]
    */
-	if(between_and(currentBytecode, 0, 119)) {
+	if (between_and(currentBytecode, 0, 119)) {
 		stackBytecode();
 	}
-	else if(between_and(currentBytecode, 120, 127)) {
+	else if (between_and(currentBytecode, 120, 127)) {
 		returnBytecode();
 	}
-	else if(between_and(currentBytecode, 128, 130)) {
+	else if (between_and(currentBytecode, 128, 130)) {
 		stackBytecode();
 	}
-	else if(between_and(currentBytecode, 131, 134)) {
+	else if (between_and(currentBytecode, 131, 134)) {
 		sendBytecode();
 	}
-	else if(between_and(currentBytecode, 135, 137)) {
+	else if (between_and(currentBytecode, 135, 137)) {
 		stackBytecode();
 	}
-	else if(between_and(currentBytecode, 144, 175)) {
+	else if (between_and(currentBytecode, 144, 175)) {
 		jumpBytecode();
 	}
-	else if(between_and(currentBytecode, 176, 255)) {
+	else if (between_and(currentBytecode, 176, 255)) {
 		sendBytecode();
 	}
 }
 
-
-// fetchByte
 int Interpreter::fetchByte() {
 	int byte;
 	
@@ -4568,8 +4378,6 @@ int Interpreter::fetchByte() {
 	return byte;
 }
 
-
-// cycle
 void Interpreter::cycle() {
 	/* "source"
    	self checkProcessSwitch.
@@ -4582,8 +4390,6 @@ void Interpreter::cycle() {
 	dispatchOnThisBytecode();
 }
 
-
-// interpret
 void Interpreter::interpret() {
 	/* "source"
    	[true] whileTrue: [self cycle]
@@ -4593,8 +4399,6 @@ void Interpreter::interpret() {
 	}
 }
 
-
-// primitiveIndexOf:
 int Interpreter::primitiveIndexOf(int methodPointer) {
 	int flagValue;
 	
@@ -4606,14 +4410,12 @@ int Interpreter::primitiveIndexOf(int methodPointer) {
    		ifFalse: [^0]
    */
 	flagValue = flagValueOf(methodPointer);
-	if(flagValue==7) {
+	if (flagValue == 7) {
 		return extractBits_to_of(7, 14, headerExtensionOf(methodPointer));
 	}
 	return 0;
 }
 
-
-// argumentCountOf:
 int Interpreter::argumentCountOf(int methodPointer) {
 	int flagValue;
 	
@@ -4627,15 +4429,14 @@ int Interpreter::argumentCountOf(int methodPointer) {
    				of: (self headerExtensionOf: methodPointer)]
    */
 	flagValue = flagValueOf(methodPointer);
-	if(flagValue < 5)
+	if (flagValue < 5)
 		return flagValue;
-	if(flagValue < 7)
+	if (flagValue < 7)
 		return 0;
 	else
 		return extractBits_to_of(2, 6, headerExtensionOf(methodPointer));
 }
 
-// methodClassOf:
 int Interpreter::methodClassOf(int methodPointer) {
 	int literalCount;
 	int association;
@@ -4652,8 +4453,6 @@ int Interpreter::methodClassOf(int methodPointer) {
 	return memory.fetchPointer_ofObject(ValueIndex, association);
 }
 
-
-// storeAndPopReceiverVariableBytecode
 void Interpreter::storeAndPopReceiverVariableBytecode() {
 	int variableIndex;
 	
@@ -4669,8 +4468,6 @@ void Interpreter::storeAndPopReceiverVariableBytecode() {
 	memory.storePointer_ofObject_withValue(variableIndex, receiver, popStack());
 }
 
-
-// extendedStoreBytecode
 void Interpreter::extendedStoreBytecode() {
 	int descriptor;
 	int variableType;
@@ -4720,8 +4517,6 @@ void Interpreter::extendedStoreBytecode() {
 	}
 }
 
-
-// pushLiteralConstantBytecode
 void Interpreter::pushLiteralConstantBytecode() {
 	int fieldIndex;
 	
@@ -4735,8 +4530,6 @@ void Interpreter::pushLiteralConstantBytecode() {
 	pushLiteralConstant(fieldIndex);
 }
 
-
-// storeAndPopTemporaryVariableBytecode
 void Interpreter::storeAndPopTemporaryVariableBytecode() {
 	int variableIndex;
 	
@@ -4753,8 +4546,6 @@ void Interpreter::storeAndPopTemporaryVariableBytecode() {
 	                                       popStack());
 }
 
-
-// extendedStoreAndPopBytecode
 void Interpreter::extendedStoreAndPopBytecode() {
 	/* "source"
    	self extendedStoreBytecode.
@@ -4765,8 +4556,6 @@ void Interpreter::extendedStoreAndPopBytecode() {
 	popStackBytecode();
 }
 
-
-// stackBytecode
 void Interpreter::stackBytecode() {
 	/* "source"
    	(currentBytecode between: 0 and: 15)
@@ -4799,38 +4588,36 @@ void Interpreter::stackBytecode() {
    		ifTrue: [^self pushActiveContextBytecode]
    */
 	
-	if(between_and(currentBytecode, 0, 15))
+	if (between_and(currentBytecode, 0, 15))
 		pushReceiverVariableBytecode();
-	else if(between_and(currentBytecode, 16, 31))
+	else if (between_and(currentBytecode, 16, 31))
 		pushTemporaryVariableBytecode();
-	else if(between_and(currentBytecode, 32, 63))
+	else if (between_and(currentBytecode, 32, 63))
 		pushLiteralConstantBytecode();
-	else if(between_and(currentBytecode, 64, 95))
+	else if (between_and(currentBytecode, 64, 95))
 		pushLiteralVariableBytecode();
-	else if(between_and(currentBytecode, 96, 103))
+	else if (between_and(currentBytecode, 96, 103))
 		storeAndPopReceiverVariableBytecode();
-	else if(between_and(currentBytecode, 104, 111))
+	else if (between_and(currentBytecode, 104, 111))
 		storeAndPopTemporaryVariableBytecode();
-	else if(currentBytecode==112)
+	else if (currentBytecode == 112)
 		pushReceiverBytecode();
-	else if(between_and(currentBytecode, 113, 119))
+	else if (between_and(currentBytecode, 113, 119))
 		pushConstantBytecode();
-	else if(currentBytecode==128)
+	else if (currentBytecode == 128)
 		extendedPushBytecode();
-	else if(currentBytecode==129)
+	else if (currentBytecode == 129)
 		extendedStoreBytecode();
-	else if(currentBytecode==130)
+	else if (currentBytecode == 130)
 		extendedStoreAndPopBytecode();
-	else if(currentBytecode==135)
+	else if (currentBytecode == 135)
 		popStackBytecode();
-	else if(currentBytecode==136)
+	else if (currentBytecode == 136)
 		duplicateTopBytecode();
-	else if(currentBytecode==137)
+	else if (currentBytecode == 137)
 		pushActiveContextBytecode();
 }
 
-
-// extendedPushBytecode
 void Interpreter::extendedPushBytecode() {
 	int descriptor;
 	int variableType;
@@ -4866,7 +4653,6 @@ void Interpreter::extendedPushBytecode() {
 	}
 }
 
-// pushConstantBytecode
 void Interpreter::pushConstantBytecode() {
 	/* "source"
    	currentBytecode = 113 ifTrue: [^self push: TruePointer].
@@ -4902,8 +4688,6 @@ void Interpreter::pushConstantBytecode() {
 	}
 }
 
-
-// jumpIf:by:
 void Interpreter::jumpIf_by(int condition, int offset) {
 	int boolean;
 	
@@ -4917,19 +4701,17 @@ void Interpreter::jumpIf_by(int condition, int offset) {
    */
 	
 	boolean = popStack();
-	if(boolean==condition) {
+	if (boolean == condition) {
 		jump(offset);
 	}
 	else {
-		if(!(boolean==TruePointer || boolean==FalsePointer)) {
+		if (!(boolean == TruePointer || boolean == FalsePointer)) {
 			unPop(1);
 			sendMustBeBoolean();
 		}
 	}
 }
 
-
-// longConditionalJump
 void Interpreter::longConditionalJump() {
 	int offset;
 	
@@ -4946,15 +4728,14 @@ void Interpreter::longConditionalJump() {
    */
 	offset = extractBits_to_of(14, 15, currentBytecode);
 	offset = offset * 256 + fetchByte();
-	if(between_and(currentBytecode, 168, 171)) {
+	if (between_and(currentBytecode, 168, 171)) {
 		jumpIf_by(TruePointer, offset);
 	}
-	else if(between_and(currentBytecode, 172, 175)) {
+	else if (between_and(currentBytecode, 172, 175)) {
 		jumpIf_by(FalsePointer, offset);
 	}
 }
 
-// jumpBytecode
 void Interpreter::jumpBytecode() {
 	/* "source"
    	(currentBytecode between: 144 and: 151)
@@ -4967,17 +4748,16 @@ void Interpreter::jumpBytecode() {
    		ifTrue: [^self longConditionalJump]
    */
 	
-	if(between_and(currentBytecode, 144, 151))
+	if (between_and(currentBytecode, 144, 151))
 		shortUnconditionalJump();
-	else if(between_and(currentBytecode, 152, 159))
+	else if (between_and(currentBytecode, 152, 159))
 		shortConditionalJump();
-	else if(between_and(currentBytecode, 160, 167))
+	else if (between_and(currentBytecode, 160, 167))
 		longUnconditionalJump();
-	else if(between_and(currentBytecode, 168, 175))
+	else if (between_and(currentBytecode, 168, 175))
 		longConditionalJump();
 }
 
-// storeInteger:ofObject:withValue:
 void Interpreter::storeInteger_ofObject_withValue(int fieldIndex, int objectPointer, int integerValue) {
 	int integerPointer;
 	
@@ -4989,7 +4769,7 @@ void Interpreter::storeInteger_ofObject_withValue(int fieldIndex, int objectPoin
    				withValue: integerPointer]
    		ifFalse: [^self primitiveFail]
    */
-	if(memory.isIntegerValue(integerValue)) {
+	if (memory.isIntegerValue(integerValue)) {
 		integerPointer = memory.integerObjectOf(integerValue);
 		memory.storePointer_ofObject_withValue(fieldIndex, objectPointer, integerPointer);
 	}
@@ -4997,15 +4777,13 @@ void Interpreter::storeInteger_ofObject_withValue(int fieldIndex, int objectPoin
 		primitiveFail();
 }
 
-
-// transfer:fromIndex:ofObject:toIndex:ofObject:
 void Interpreter::transfer_fromIndex_ofObject_toIndex_ofObject(
 	int count,
 	int firstFrom,
 	int fromOop,
 	int firstTo,
-	int toOop
-                                                              ) {
+	int toOop) {
+	
 	int fromIndex;
 	int toIndex;
 	int lastFrom;
@@ -5040,7 +4818,6 @@ void Interpreter::transfer_fromIndex_ofObject_toIndex_ofObject(
 	}
 }
 
-// fetchInteger:ofObject:
 int Interpreter::fetchInteger_ofObject(int fieldIndex, int objectPointer) {
 	int integerPointer;
 	
@@ -5052,13 +4829,12 @@ int Interpreter::fetchInteger_ofObject(int fieldIndex, int objectPointer) {
    		ifFalse: [^self primitiveFail]
    */
 	integerPointer = memory.fetchPointer_ofObject(fieldIndex, objectPointer);
-	if(memory.isIntegerObject(integerPointer))
+	if (memory.isIntegerObject(integerPointer))
 		return memory.integerValueOf(integerPointer);
 	else
 		return primitiveFail();
 }
 
-// primitiveNewMethod
 void Interpreter::primitiveNewMethod() {
 	int header;
 	int bytecodeCount;
@@ -5080,18 +4856,16 @@ void Interpreter::primitiveNewMethod() {
 	cls = popStack();
 	int literalCount = literalCountOfHeader(header);
 	size = (literalCount + 1) * 2 + bytecodeCount;
-	int newMethod = memory.instantiateClass_withBytes(cls, size);
+	int new_method = memory.instantiateClass_withBytes(cls, size);
 	for (int i = 0; i < literalCount; i++) {
-		memory.storeWord_ofObject_withValue(LiteralStart + i, newMethod, NilPointer);
+		memory.storeWord_ofObject_withValue(LiteralStart + i, new_method, NilPointer);
 	}
 	// Note: using storeWord vs storePointer because it memory with
 	// initialized with zeros and this break ref counting
-	memory.storeWord_ofObject_withValue(HeaderIndex, newMethod, header);
-	push(newMethod);
+	memory.storeWord_ofObject_withValue(HeaderIndex, new_method, header);
+	push(new_method);
 }
 
-
-// primitiveAsOop
 void Interpreter::primitiveAsOop() {
 	int thisReceiver;
 	
@@ -5103,15 +4877,13 @@ void Interpreter::primitiveAsOop() {
    		ifFalse: [self unPop: 1]
    */
 	thisReceiver = popStack();
-	success(memory.isIntegerObject(thisReceiver)==false);
-	if(success())
+	success(!memory.isIntegerObject(thisReceiver));
+	if (success())
 		push(thisReceiver | 1);
 	else
 		unPop(1);
 }
 
-
-// primitiveSomeInstance
 void Interpreter::primitiveSomeInstance() {
 	int cls;
 	int instance;
@@ -5134,14 +4906,12 @@ void Interpreter::primitiveSomeInstance() {
 	
 	cls = popStack();
 	instance = memory.initialInstanceOf(cls);
-	if(instance==NilPointer)
+	if (instance == NilPointer)
 		primitiveFail();
 	else
 		push(instance);
 }
 
-
-// primitiveObjectAt
 void Interpreter::primitiveObjectAt() {
 	int thisReceiver;
 	int index;
@@ -5160,7 +4930,7 @@ void Interpreter::primitiveObjectAt() {
 	thisReceiver = popStack();
 	success(index > 0);
 	success(index <= objectPointerCountOf(thisReceiver));
-	if(success()) {
+	if (success()) {
 		push(memory.fetchPointer_ofObject(index - 1, thisReceiver));
 	}
 	else
@@ -5168,8 +4938,6 @@ void Interpreter::primitiveObjectAt() {
 	
 }
 
-
-// primitiveNextInstance
 void Interpreter::primitiveNextInstance() {
 	int object;
 	int instance;
@@ -5190,14 +4958,12 @@ void Interpreter::primitiveNextInstance() {
    */
 	object = popStack();
 	instance = memory.instanceAfter(object);
-	if(instance==NilPointer)
+	if (instance == NilPointer)
 		primitiveFail();
 	else
 		push(instance);
 }
 
-
-// primitiveNew
 void Interpreter::primitiveNew() {
 	int cls;
 	int size;
@@ -5217,9 +4983,9 @@ void Interpreter::primitiveNew() {
 	
 	cls = popStack();
 	size = fixedFieldsOf(cls);
-	success(isIndexable(cls)==false);
-	if(success()) {
-		if(isPointers(cls)) {
+	success(!isIndexable(cls));
+	if (success()) {
+		if (isPointers(cls)) {
 			push(memory.instantiateClass_withPointers(cls, size));
 		}
 		else {
@@ -5230,8 +4996,6 @@ void Interpreter::primitiveNew() {
 		unPop(1);
 }
 
-
-// primitiveAsObject
 void Interpreter::primitiveAsObject() {
 	int thisReceiver;
 	int newOop;
@@ -5249,15 +5013,13 @@ void Interpreter::primitiveAsObject() {
 	thisReceiver = popStack();
 	newOop = thisReceiver & 0xFFFE;
 	success(memory.hasObject(newOop));
-	if(success())
+	if (success())
 		push(newOop);
 	else
 		unPop(1);
 	
 }
 
-
-// primitiveNewWithArg
 void Interpreter::primitiveNewWithArg() {
 	int size;
 	int cls;
@@ -5287,13 +5049,13 @@ void Interpreter::primitiveNewWithArg() {
 	
 	cls = popStack();
 	success(isIndexable(cls));
-	if(success()) {
+	if (success()) {
 		size = size + fixedFieldsOf(cls);
-		if(isPointers(cls)) {
+		if (isPointers(cls)) {
 			push(memory.instantiateClass_withPointers(cls, size));
 		}
 		else {
-			if(isWords(cls)) {
+			if (isWords(cls)) {
 				push(memory.instantiateClass_withWords(cls, size));
 			}
 			else {
@@ -5305,8 +5067,6 @@ void Interpreter::primitiveNewWithArg() {
 		unPop(2);
 }
 
-
-// primitiveInstVarAtPut
 void Interpreter::primitiveInstVarAtPut() {
 	int thisReceiver;
 	int index;
@@ -5332,17 +5092,15 @@ void Interpreter::primitiveInstVarAtPut() {
 	index = popInteger();
 	thisReceiver = popStack();
 	checkIndexableBoundsOf_in(index, thisReceiver);
-	if(success()) {
+	if (success()) {
 		subscript_with_storing(thisReceiver, index, newValue);
 	}
-	if(success())
+	if (success())
 		push(newValue);
 	else
 		unPop(3);
 }
 
-
-// primitiveObjectAtPut
 void Interpreter::primitiveObjectAtPut() {
 	int thisReceiver;
 	int index;
@@ -5367,7 +5125,7 @@ void Interpreter::primitiveObjectAtPut() {
 	thisReceiver = popStack();
 	success(index > 0);
 	success(index <= objectPointerCountOf(thisReceiver));
-	if(success()) {
+	if (success()) {
 		memory.storePointer_ofObject_withValue(index - 1, thisReceiver, newValue);
 		push(newValue);
 	}
@@ -5376,8 +5134,6 @@ void Interpreter::primitiveObjectAtPut() {
 	
 }
 
-
-// primitiveInstVarAt
 void Interpreter::primitiveInstVarAt() {
 	int thisReceiver;
 	int index;
@@ -5399,17 +5155,15 @@ void Interpreter::primitiveInstVarAt() {
 	index = popInteger();
 	thisReceiver = popStack();
 	checkInstanceVariableBoundsOf_in(index, thisReceiver);
-	if(success())
+	if (success())
 		value = subscript_with(thisReceiver, index);
-	if(success())
+	if (success())
 		push(value);
 	else
 		unPop(2);
 	
 }
 
-
-// primitiveBecome
 void Interpreter::primitiveBecome() {
 	int thisReceiver;
 	int otherPointer;
@@ -5428,7 +5182,7 @@ void Interpreter::primitiveBecome() {
 	thisReceiver = popStack();
 	success(!memory.isIntegerObject(otherPointer));
 	success(!memory.isIntegerObject(thisReceiver));
-	if(success()) {
+	if (success()) {
 		memory.swapPointersOf_and(thisReceiver, otherPointer);
 		push(thisReceiver);
 	}
@@ -5436,8 +5190,6 @@ void Interpreter::primitiveBecome() {
 		unPop(2);
 }
 
-
-// dispatchStorageManagementPrimitives
 void Interpreter::dispatchStorageManagementPrimitives() {
 	/* "source"
    	primitiveIndex = 68 ifTrue: [^self primitiveObjectAt].
@@ -5504,12 +5256,10 @@ void Interpreter::pushFloat(float f) {
 
 float Interpreter::popFloat() {
 	int objectPointer = popStack();
-	success(memory.fetchClassOf(objectPointer)==ClassFloatPointer);
-	if(success()) {
+	success(memory.fetchClassOf(objectPointer) == ClassFloatPointer);
+	if (success()) {
 		return extractFloat(objectPointer);
 	}
 	
 	return std::nanf("");
 }
-
-

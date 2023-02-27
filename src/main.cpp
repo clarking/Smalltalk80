@@ -32,49 +32,50 @@
 // (it wasn't respecting the display scaling setting).
 //
 
+#include "conf.h"
 #include "vm.h"
 
 static bool process_args(int argc, const char *argv[], struct options &options) {
-	if(argc < 3)
+	if (argc < 3)
 		return false;
 	
 	int arg = 1;
 	while (arg < argc) {
 		// directory option
-		if(strcmp(argv[arg], "-directory")==0 && arg + 1 < argc) {
+		if (strcmp(argv[arg], "-directory") == 0 && arg + 1 < argc) {
 			arg++;
 			options.root_directory = argv[arg];
 			
 			// Remove trailing directory separator (if any) -- Unix and Windows
-			if(options.root_directory[options.root_directory.size() - 1]=='/' ||
-			   options.root_directory[options.root_directory.size() - 1]=='\\')
+			if (options.root_directory[options.root_directory.size() - 1] == '/' ||
+			    options.root_directory[options.root_directory.size() - 1] == '\\')
 				options.root_directory.pop_back();
 		}
-		else if(strcmp(argv[arg], "-image")==0 && arg + 1 < argc) {
+		else if (strcmp(argv[arg], "-image") == 0 && arg + 1 < argc) {
 			arg++;
 			options.snapshot_name = argv[arg];
 		}
-		else if(strcmp(argv[arg], "-delay")==0 && arg + 1 < argc) {
+		else if (strcmp(argv[arg], "-delay") == 0 && arg + 1 < argc) {
 			arg++;
 			int delay = atoi(argv[arg]);
-			if(delay < 0)
+			if (delay < 0)
 				return false;
 			options.novsync_delay = delay;
 		}
-		else if(strcmp(argv[arg], "-cycles")==0 && arg + 1 < argc) {
+		else if (strcmp(argv[arg], "-cycles") == 0 && arg + 1 < argc) {
 			arg++;
 			int cycles = atoi(argv[arg]);
-			if(cycles <= 0)
+			if (cycles <= 0)
 				return false;
 			options.cycles_per_frame = cycles;
 		}
-		else if(strcmp(argv[arg], "-2x")==0) {
+		else if (strcmp(argv[arg], "-2x") == 0) {
 			options.display_scale = 2;
 		}
-		else if(strcmp(argv[arg], "-vsync")==0) {
+		else if (strcmp(argv[arg], "-vsync") == 0) {
 			options.vsync = true;
 		}
-		else if(strcmp(argv[arg], "-three")==0) {
+		else if (strcmp(argv[arg], "-three") == 0) {
 			options.three_buttons = true;
 		}
 		else
@@ -97,7 +98,7 @@ int main(int argc, const char *argv[]) {
 	vm_options.cycles_per_frame = 5500;
 	vm_options.display_scale = 1;
 	
-	if(!process_args(argc, argv, vm_options)) {
+	if (!process_args(argc, argv, vm_options)) {
 		std::cerr << "usage: " << argv[0] <<
 		          " -directory root-directory [-vsync] [-delay ms] [-cycles cycles-per-frame] [-2x] [-image snapshot]"
 		          << std::endl;
@@ -105,7 +106,7 @@ int main(int argc, const char *argv[]) {
 	}
 	
 	VirtualMachine *vm = new VirtualMachine(vm_options);
-	if(vm->init())
+	if (vm->init())
 		vm->run();
 	else
 		std::cerr << "VM failed to initialize (invalid/missing directory or snapshot?)" << std::endl;
